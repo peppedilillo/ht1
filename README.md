@@ -18,25 +18,15 @@ This project uses Docker to replicate the target Ubuntu 18.04 / Python 3.6 envir
     docker-compose build
     ```
     
-    To build with no cache, with logs:
+    To build with no cache and logs:
     
     ```bash
     docker build --progress=plain --no-cache -t fm1trig-dev:latest . 2>&1
     ```
 
-2. **Run the hello world script:**
-    ```bash
-    docker-compose run --rm dev python3 hello.py
-    ```
-
-3. **Enter the container for interactive development:**
+2. **Enter the container for interactive development:**
     ```bash
     docker-compose run --rm dev
-    ```
-    
-    Once inside the container, you can run scripts directly:
-    ```bash
-    python3 hello.py
     ```
 
 ### Running Tests
@@ -50,15 +40,3 @@ This project uses Docker to replicate the target Ubuntu 18.04 / Python 3.6 envir
     ```bash
     python3 -m pytest tests/ -v
     ```
-
-### Project Structure
-
-- `hello.py` - Simple test script that reads SRA test data
-- `tests/data/` - Test ratemeter data organized by timestamp
-- `requirements.txt` - Python dependencies
-- `Dockerfile` - Ubuntu 18.04 development environment
-- `docker-compose.yml` - Docker Compose configuration
-
-### Test Data
-
-Test data follows the pattern: `tests/data/YYYYMMDD_HHMMSS/SRA/*.raw`
