@@ -1,0 +1,11 @@
+services:
+  dev:
+    build: .
+    image: fm1trig-dev:latest
+    container_name: fm1trig-dev
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    command: /bin/bash
