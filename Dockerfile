@@ -26,7 +26,7 @@ WORKDIR /workspace
 COPY . /workspace/
 
 # Install Python dependencies
-RUN pip3 install -e ".[dev]"
+RUN pip3 install ".[dev]"
 
 # Default command
 CMD ["/bin/bash"]

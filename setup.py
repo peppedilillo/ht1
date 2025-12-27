@@ -2,7 +2,6 @@ from setuptools import setup, find_packages
 import pathlib
 
 here = pathlib.Path(__file__).parent.resolve()
-long_description = (here / "README.md").read_text(encoding="utf-8")
 setup(
     name="fm1trig",
     version="0.1",
@@ -16,6 +15,6 @@ setup(
     packages=find_packages(where="src"),
     python_requires="~=3.6",
     extras_require={  # Optional
-        "dev": ["pytest", "black", "isort", "pyinstrument"],
+        "dev": ["pytest", "pyinstrument",],
     },
 )

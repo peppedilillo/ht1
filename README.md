@@ -1,6 +1,6 @@
-# FM1TRIG - SpIRIT Gamma-Burst Trigger
+# FM1TRIG - SpIRIT GRB Trigger
 
-Trigger algorithm for detecting gamma-bursts in SpIRIT satellite ratemeter data.
+Trigger algorithm for detecting gamma-ray bursts in SpIRIT satellite ratemeter data.
 
 ## Development Environment
 
@@ -13,30 +13,29 @@ This project uses Docker to replicate the target Ubuntu 18.04 / Python 3.6 envir
 
 ### Setup and Running
 
-1. **Build the Docker container:**
+1. Build the Docker container:
     ```bash
     docker-compose build
     ```
     
-    To build with no cache and logs:
+    Or, to build with no cache and logs:
     
     ```bash
     docker build --progress=plain --no-cache -t fm1trig-dev:latest . 2>&1
     ```
 
-2. **Enter the container for interactive development:**
+2. Enter the container for interactive development:
     ```bash
     docker-compose run --rm dev
     ```
 
+3. Optionally, install in editable mode.
+   ```bash
+   pip3 install -e ".[dev]"
+   ```
+   
 ### Running Tests
 
-1. **Install the package in development mode:**
-    ```bash
-    pip install -e .
-    ```
-
-2. **Run all tests:**
-    ```bash
-    python3 -m pytest tests/ -v
-    ```
+ ```bash
+ python3 -m pytest tests/ -v
+ ```
