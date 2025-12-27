@@ -29,7 +29,7 @@ BandData = Tuple[List[int], ...] # one list for quadrant
 Data = Tuple[BandData, ...]
 
 def sra_parse(filepath: Path) -> Tuple[Data, List[int],]:
-    """Parses a SRA file and returns data and ABTs as lists.
+    """Parses SRA file and returns data and ABTs as lists.
     Data are organized as a list of lists, the most external layer for the energy band,
     the most internal for the quadrant. According to this convention, the quadrant B (0),
     high-energy band (2) shall is selected with `data[2][0]`"""
@@ -59,7 +59,7 @@ def _find_spikes(bdata: BandData, thr: float=10.0) -> Dict[int, List[int]]:
     for quad in range(NQUADRANTS):
         qdata = bdata[quad]
         for i in range(1, len(qdata) - 1):
-            x, b = qdata[i], qdata[i - 1] + qdata[i + 1] + 1
+            x, b = qdata[i], 0.5 * (qdata[i - 1] + qdata[i + 1]) + 1.
             if x > 0 and (x * log(x / b) - (x - b)) > thr_sq_half:
                 spikes.setdefault(i, []).append(quad)
     return {k: v for k, v in spikes.items() if len(v) < NQUADRANTS}

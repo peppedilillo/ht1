@@ -2,7 +2,7 @@
 Tests for spike detection and fixing functions.
 """
 
-from fm1trig.search import _find_spikes, _fix_spikes, NQUADRANTS
+from fm1trig.search import _find_spikes, _fix_spikes
 
 
 def test_find_single_quadrant_spike():
