@@ -8,30 +8,43 @@ from itertools import accumulate
 from math import log
 from collections import deque, Counter
 from pathlib import Path
-from typing import NamedTuple, Tuple, List
+from typing import NamedTuple, Tuple, List, Sequence
 from enum import Enum, IntEnum
+
 
 NQUADRANTS: int = 3
 NBANDS: int = 3
-
 
 class SRASpecs(NamedTuple):
     """SRA file specifics and header definition."""
     BLOCK_SIZE: int = 124
     HEADER_SIZE: int = 33
-    FILELEN: tuple = (21, 25)
+    FILELEN: Tuple[int, int] = (21, 25)
     FILELEN_FMT: str = "=I"
     ABT_SIZE: int = 4
     ABT_FMT: str = "=I"
     DATA_SIZE: int = 10
     DATA_FMT: str = "10B"
 
+class Quadrant(IntEnum):
+    """Quadrant name/index"""
+    B = 0
+    C = 1
+    D = 2
 
-BandQuadData = List[int]# one list for quadrant
-BandData = Tuple[BandQuadData, ...] # one list for quadrant
-Data = Tuple[BandData, ...]
+class EnBand(IntEnum):
+    """Energy band name/index"""
+    LOW = 0
+    MID = 1
+    HIGH = 2
 
-def sra_parse(filepath: Path) -> Tuple[Data, List[int],]:
+BandData = Tuple[List[int], ...]  # one list per quadrant
+Data = Tuple[BandData, ...]  # one BandData per band
+Hit = Tuple[int, int]  # trigger time-index, window length
+Index = Tuple[EnBand, Quadrant]  # band-quadrant combination index
+
+
+def sra_parse(filepath: Path) -> Tuple[Data, List[int]]:
     """Parses SRA file and returns data and ABTs as lists.
     Data are organized as a list of lists, the most external layer for the energy band,
     the most internal for the quadrant. According to this convention, the quadrant B (0),
@@ -39,6 +52,9 @@ def sra_parse(filepath: Path) -> Tuple[Data, List[int],]:
 
     Raises a ValueError if header file size value is larger than actual file size."""
     sra_specs = SRASpecs()
+    block_fmt = sra_specs.ABT_FMT + sra_specs.DATA_FMT * ((NQUADRANTS + 1) * NBANDS)
+    block_struct = struct.Struct(block_fmt)
+
     fsize = filepath.stat().st_size
     with open(filepath, "rb") as f:
         if fsize < sra_specs.HEADER_SIZE:
@@ -49,18 +65,22 @@ def sra_parse(filepath: Path) -> Tuple[Data, List[int],]:
         if nblocks * sra_specs.BLOCK_SIZE > fsize - sra_specs.HEADER_SIZE:
             raise ValueError("Invalid header fsize.")
         abts = [0] * nblocks
-        data =  tuple(tuple([0] * (nblocks * sra_specs.DATA_SIZE) for _ in range(NQUADRANTS)) for _ in range(NBANDS))
+        data = tuple(tuple([0] * (nblocks * sra_specs.DATA_SIZE) for _ in range(NQUADRANTS)) for _ in range(NBANDS))
         for block in range(nblocks):
-            abts[block: block + 1] = struct.unpack(sra_specs.ABT_FMT, f.read(sra_specs.ABT_SIZE))
+            values = block_struct.unpack(f.read(sra_specs.BLOCK_SIZE))
+            abts[block] = values[0]
+            offset = 1  # skip ABT
             for band in range(NBANDS):
-                # the quadrant A of FM1 is not working, we read but not store its data
-                _ = f.read(sra_specs.DATA_SIZE)
+                offset += sra_specs.DATA_SIZE  # skip quadrant A
                 for quad in range(NQUADRANTS):
-                    data[band][quad][block * sra_specs.DATA_SIZE: (block + 1) * sra_specs.DATA_SIZE] = struct.unpack(sra_specs.DATA_FMT, f.read(sra_specs.DATA_SIZE))
+                    start = block * sra_specs.DATA_SIZE
+                    end = start + sra_specs.DATA_SIZE
+                    data[band][quad][start:end] = values[offset:offset + sra_specs.DATA_SIZE]
+                    offset += sra_specs.DATA_SIZE
     return data, abts
 
 
-def moving_average(data: List[int], size: int) -> List[float]:
+def moving_average(data: Sequence[int], size: int) -> List[float]:
     """Computes centered, simple moving average of `data`, at `2 * size + 1` window length.
     At edges, the window size is asymmetrical and shrinks down to `size + 1`."""
     n = len(data)
@@ -107,7 +127,7 @@ class TriggerDyadic:
         self.queue_x = deque([0.0], maxlen=foreground_len + 1)
         self.queue_b = deque([0.0], maxlen=foreground_len + 1)
 
-    def __call__(self, xs: List[int], bs: List[float]):
+    def __call__(self, xs: Sequence[int], bs: Sequence[float]) -> List[Hit]:
         """Runs algorithm on count data and associated background estimates."""
         hits = []
         for i, (x, b) in enumerate(zip(xs, bs)):
@@ -143,14 +163,14 @@ class TriggerDyadic:
         self.acc_b += b
 
         if self.status() == TriggerStatus.RUNNING:
-            hits = self.maximize()
+            hs = self.maximize()
 
             self.queue_x.popleft()
             self.queue_b.popleft()
             self.queue_x.append(self.acc_x)
             self.queue_b.append(self.acc_b)
             self.phase_counter = (self.phase_counter + 1) % self.foreground_len
-            return hits
+            return hs
 
         else:
             self.queue_x.append(self.acc_x)
@@ -160,21 +180,8 @@ class TriggerDyadic:
             return []
 
 
-class Quadrant(IntEnum):
-    """Quadrant name/index"""
-    B = 0
-    C = 1
-    D = 2
-
-class EnBand(IntEnum):
-    """Energy band name/index"""
-    LOW = 0
-    MID = 1
-    HIGH = 2
-
-
 _INVALID = (-1, -1)
-def data_valid_range(data: BandQuadData, size: int) -> Tuple[int, int]:
+def data_valid_range(data: Sequence[int], size: int) -> Tuple[int, int]:
     """Return range between first and last non-zero element, padded by the moving average window size.
     In other words, this returns range over which moving average ran over presumably sane data."""
     i = 0
@@ -195,11 +202,11 @@ def data_valid_range(data: BandQuadData, size: int) -> Tuple[int, int]:
 
 def search_data(
         data: Data,
-        checks: List[Tuple[EnBand, Quadrant]],
+        checks: Sequence[Index],
         size: int,
         foreground_len: int,
         threshold: float
-) -> List[Tuple[int, int]]:
+) -> List[Hit]:
     n = len(data[0][0])
     size = size if 2 * size + 1 <= n else n // 2 - 1
     vranges = {}
@@ -218,7 +225,7 @@ def search_data(
 
 def search(
         filepath: Path,
-        checks: List[Tuple[EnBand, Quadrant]] = (
+        checks: Sequence[Index] = (
             (EnBand.MID, Quadrant.B),
             (EnBand.MID, Quadrant.C),
             (EnBand.MID, Quadrant.D),
@@ -229,7 +236,7 @@ def search(
         size: int = 50,
         foreground_len: int = 8,
         threshold: float = 5.0,
-) -> List[Tuple[int, int]]:
+) -> List[Hit]:
     data, abts = sra_parse(filepath)
     return search_data(data, checks, size, foreground_len, threshold)
 
