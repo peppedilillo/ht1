@@ -144,7 +144,6 @@ class TriggerDyadic:
         Uses phase_counter optimization: a window with length 8 is checked once every 8 calls."""
         hs = []
         h = 1
-        # print(f"    queue: {self.queue_x}")
         while h <= self.foreground_len:
             # checking `2 * self.phase_counter % h` results in window length h being tested *2* times over h calls.
             if self.phase_counter % h:
@@ -180,7 +179,7 @@ class TriggerDyadic:
             return []
 
 
-_INVALID = (-1, -1)
+_INVALID_RANGE = (-1, -1)
 def data_valid_range(data: Sequence[int], size: int) -> Tuple[int, int]:
     """Return range between first and last non-zero element, padded by the moving average window size.
     In other words, this returns range over which moving average ran over presumably sane data."""
@@ -188,7 +187,7 @@ def data_valid_range(data: Sequence[int], size: int) -> Tuple[int, int]:
     while data[i] == 0:
         i += 1
     if i == len(data):
-        return _INVALID
+        return _INVALID_RANGE
     j = len(data) - 1
     while data[j] == 0:
         j -= 1
@@ -196,7 +195,7 @@ def data_valid_range(data: Sequence[int], size: int) -> Tuple[int, int]:
     i = min(i + size, len(data) - 1)
     j = max(0, j - size)
     if j < i:
-        return _INVALID
+        return _INVALID_RANGE
     return i, j + 1
 
 
