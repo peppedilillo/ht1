@@ -42,6 +42,7 @@ BandData = Tuple[List[int], ...]  # one list per quadrant
 Data = Tuple[BandData, ...]  # one BandData per band
 Hit = Tuple[int, int]  # trigger time-index, window length
 Index = Tuple[EnBand, Quadrant]  # band-quadrant combination index
+Range = Tuple[int, int]
 
 
 def sra_parse(filepath: Path) -> Tuple[Data, List[int]]:
@@ -80,21 +81,40 @@ def sra_parse(filepath: Path) -> Tuple[Data, List[int]]:
     return data, abts
 
 
-def moving_average(data: Sequence[int], size: int) -> List[float]:
-    """Computes centered, simple moving average of `data`, at `2 * size + 1` window length.
-    At edges, the window size is asymmetrical and shrinks down to `size + 1`."""
+_INVALID_RANGE = (-1, -1)
+def ma_range(data: Sequence[int], size: int) -> Range:
+    """Return range between first and last non-zero element, padded by the moving average window size.
+    In other words, this returns range over which moving average ran over presumably sane data."""
     n = len(data)
+    if n == 0:
+        return _INVALID_RANGE
+    i = 0
+    while i < n and data[i] == 0:
+        i += 1
+    if i == n:
+        return _INVALID_RANGE
+    j = n - 1
+    while data[j] == 0:
+        j -= 1
+    i += size
+    j -= size - 1
+    # `j - i` is the number of moving average values you get
+    if j - i < 1:
+        return _INVALID_RANGE
+    # interval closed at left, open to the right: iterate over range(i, j)
+    return i, j
+
+
+def moving_average(data: Sequence[int], size: int) -> Tuple[List[float], Range]:
+    """Computes centered, simple moving average of `data`, at `2 * size + 1` window length."""
+    vrange = ma_range(data, size)
     cumsum = [0] + list(accumulate(data))
-
     sma = []
-    for i in range(n):
-        lower = max(0, i - size)
-        upper = min(n, i + size + 1)
-
-        window_sum = cumsum[upper] - cumsum[lower]
-        window_len = upper - lower
+    window_len = 2 * size + 1
+    for i in range(*vrange):
+        window_sum = cumsum[i + size + 1] - cumsum[i - size]
         sma.append(window_sum / window_len)
-    return sma
+    return sma, vrange
 
 
 class TriggerStatus(Enum):
@@ -127,11 +147,11 @@ class TriggerDyadic:
         self.queue_x = deque([0.0], maxlen=foreground_len + 1)
         self.queue_b = deque([0.0], maxlen=foreground_len + 1)
 
-    def __call__(self, xs: Sequence[int], bs: Sequence[float]) -> List[Hit]:
+    def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Range) -> List[Hit]:
         """Runs algorithm on count data and associated background estimates."""
         hits = []
-        for i, (x, b) in enumerate(zip(xs, bs)):
-            hits.extend([(i, h) for h in self.step(x, b)])
+        for i, j in enumerate(range(*vrange)):
+            hits.extend([(j, h) for h in self.step(xs[j], bs[i])])
         return hits
 
     def status(self) -> TriggerStatus:
@@ -179,26 +199,6 @@ class TriggerDyadic:
             return []
 
 
-_INVALID_RANGE = (-1, -1)
-def data_valid_range(data: Sequence[int], size: int) -> Tuple[int, int]:
-    """Return range between first and last non-zero element, padded by the moving average window size.
-    In other words, this returns range over which moving average ran over presumably sane data."""
-    i = 0
-    while data[i] == 0:
-        i += 1
-    if i == len(data):
-        return _INVALID_RANGE
-    j = len(data) - 1
-    while data[j] == 0:
-        j -= 1
-    # no need to check here, we have at least one zero
-    i = min(i + size, len(data) - 1)
-    j = max(0, j - size)
-    if j < i:
-        return _INVALID_RANGE
-    return i, j + 1
-
-
 def search_data(
         data: Data,
         checks: Sequence[Index],
@@ -206,19 +206,15 @@ def search_data(
         foreground_len: int,
         threshold: float
 ) -> List[Hit]:
-    n = len(data[0][0])
-    size = size if 2 * size + 1 <= n else n // 2 - 1
-    vranges = {}
     hits_counter = Counter()
     for band, quadrant in checks:
         xs = data[band][quadrant]
-        bs = moving_average(xs, size)
-        t = TriggerDyadic(foreground_len=foreground_len, threshold=threshold)
-        for ih in t(xs, bs):
-            i, h = ih
-            vmin, vmax = vranges.setdefault((band, quadrant), data_valid_range(xs, size))
-            if vmin <= i < vmax:
-                hits_counter[ih] += 1
+        bs, vrange = moving_average(xs, size)
+        if vrange == _INVALID_RANGE:
+            continue
+        trigger = TriggerDyadic(foreground_len=foreground_len, threshold=threshold)
+        for ih in trigger(xs, bs, vrange=vrange):
+            hits_counter[ih] += 1
     return [ih for ih, count in hits_counter.items() if count == len(checks)]
 
 

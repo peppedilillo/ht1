@@ -3,6 +3,9 @@ Test script for sra_parse function.
 """
 
 from pathlib import Path
+
+import pytest
+
 from fm1trig.search import sra_parse, NQUADRANTS, NBANDS
 
 
@@ -32,6 +35,24 @@ def test_sra_parse_all_files():
     print(f"PASS: All {len(sra_files)} files parsed successfully with valid data")
 
 
+def test_sra_parse_empty_file():
+    """Empty file should raise ValueError about file size smaller than header."""
+    empty_file = Path(__file__).parent / "data" / "invalid" / "empty"
+    with pytest.raises(ValueError) as exc_info:
+        sra_parse(empty_file)
+    assert "File size smaller than header size" in str(exc_info.value)
+
+
+def test_sra_parse_invalid_header():
+    """File with invalid header (ASCII art) should raise ValueError about invalid header fsize."""
+    invalid_file = Path(__file__).parent / "data" / "invalid" / "invalid.txt"
+    with pytest.raises(ValueError) as exc_info:
+        sra_parse(invalid_file)
+    assert "Invalid header fsize" in str(exc_info.value)
+
+
 if __name__ == "__main__":
     test_sra_parse_all_files()
+    test_sra_parse_empty_file()
+    test_sra_parse_invalid_header()
     print("\nAll tests passed!")
