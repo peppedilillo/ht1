@@ -7,19 +7,22 @@ This codebase implements a transient detection algorithm for deployment on Loris
 1. Copy the script `ht1.py` from the `src/ht1` directory.
 2. Run on HERMES SRA binary files with `python3 ht1.py SRAFILENAME`.
 
-If the transient search returns a positive, a new file `SRAFILENAME_trigger.txt` is created in the `SRAFILENAME` parent directory. If no transient is found, no file is created.
+If the transient search returns a positive, a new file `SRAFILENAME_trigger.txt` is created in the `SRAFILENAME` parent directory. 
+The trigger output files are purposefully minimal UTF-8 encoded text files. 
+They contain only three integers: the number of trigger hits, a start-time index, and an end-time index. The transients live somewhere between the start and end time indeces.
+If no transient is found, no file is created.
 The script returns error code 0 upon successful execution, error code 1 over wrong parameters, or error code 2 over invalid input file.
 
-Search parameters can be controlled using a number of flags, see `python3 ht1.py --help` for more informations.
+Search parameters can be controlled using a number of flags, see `python3 ht1.py --help` for more information.
 
 ### Working with ht1 on ground
 
-This package can also be installed for onground applications, see [documentation](docs/scripting_ht1.md) for more info.
+This codebase can also be installed as package for reproducibility and on-ground applications, see [documentation](docs/scripting_ht1.md) for more info.
 
 ## Testing
 ### With docker
 
-The package comes with a minimal docker setup intended for testing in an replica environment of the NVIDIA Jetson Nano board.
+The package comes with a minimal docker setup intended for testing in a replica environment of the NVIDIA Jetson Nano board.
 
 1. Build the Docker container:
     ```bash
