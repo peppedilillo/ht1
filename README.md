@@ -1,6 +1,6 @@
 # ht1
 
-This codebase implements a Python 3.6 transient detection algorithm for deployment on Loris NVIDIA Jetson Nano single-board computer. 
+This codebase implements a transient detection algorithm for deployment on Loris NVIDIA Jetson Nano computer on-board SpIRIT nanosatellite, in pure Python >= 3.6. 
 
 ## Usage
 
