@@ -2,14 +2,14 @@
 Tests for data_valid_range function.
 """
 
-from fm1trig.search import ma_range, _INVALID_RANGE
+from fm1trig.search import ma_range, _INVALID_INTERVAL
 
 
 def test_empty_data():
     """Empty data should return invalid range."""
     data = []
     size = 1
-    expected = _INVALID_RANGE
+    expected = _INVALID_INTERVAL
     assert ma_range(data, size) == expected
 
 
@@ -17,7 +17,7 @@ def test_all_zeros():
     """Data with all zeros should return invalid range."""
     data = [0, 0, 0, 0, 0]
     size = 1
-    expected = _INVALID_RANGE
+    expected = _INVALID_INTERVAL
     assert ma_range(data, size) == expected
 
 
@@ -25,7 +25,7 @@ def test_single_nonzero_too_short():
     """Single non-zero element is too short for any size > 0."""
     data = [0, 0, 1, 0, 0]
     size = 1
-    expected = _INVALID_RANGE
+    expected = _INVALID_INTERVAL
     assert ma_range(data, size) == expected
 
 
@@ -35,7 +35,7 @@ def test_data_too_short_for_size():
     size = 1
     # first non-zero: i=1, last non-zero: j=2
     # after padding: i=2, j=2, so j-i=0 < 1
-    expected = _INVALID_RANGE
+    expected = _INVALID_INTERVAL
     assert ma_range(data, size) == expected
 
 
@@ -110,7 +110,7 @@ def test_larger_size_too_short():
 
     size = 3
     # after padding: i=4, j=3, so j-i=-1 < 1
-    expected = _INVALID_RANGE
+    expected = _INVALID_INTERVAL
     assert ma_range(data, size) == expected
 
 

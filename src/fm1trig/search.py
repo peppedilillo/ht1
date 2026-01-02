@@ -4,6 +4,7 @@ A program for searching transients in SpIRIT/HERMES-FM1 SRA data.
 
 import argparse
 import struct
+import sys
 from itertools import accumulate
 from math import log
 from collections import deque, Counter
@@ -11,9 +12,6 @@ from pathlib import Path
 from typing import NamedTuple, Tuple, List, Sequence, Union
 from enum import Enum, IntEnum
 
-
-_NQUADRANTS: int = 3
-_NBANDS: int = 3
 
 class Quadrant(IntEnum):
     """Quadrant name/index"""
@@ -27,11 +25,35 @@ class EnBand(IntEnum):
     MID = 1
     HIGH = 2
 
+class ErrorCode(IntEnum):
+    OK = 0
+    INVALID_FILE = 1
+    INVALID_PARAMETERS = 2
+
 BandData = Tuple[List[int], ...]  # one list per quadrant
 Data = Tuple[BandData, ...]  # one BandData per band
 Hit = Tuple[int, int]  # trigger time-index, window length
 Index = Tuple[EnBand, Quadrant]  # band-quadrant combination index
 Interval = Tuple[int, int]
+
+
+_NQUADRANTS: int = 3
+_NBANDS: int = 3
+
+_SEARCH_SIZE_DEFAULT = 210
+_SEARCH_FORELEN_DEFAULT = 8
+_SEARCH_THRESHOLD_DEFAULT = 5.
+_SEARCH_CHECKS_DEFAULT = (
+    (EnBand.MID, Quadrant.B),
+    (EnBand.MID, Quadrant.C),
+    (EnBand.MID, Quadrant.D),
+    (EnBand.HIGH, Quadrant.B),
+    (EnBand.HIGH, Quadrant.C),
+    (EnBand.HIGH, Quadrant.D),
+)
+
+_INVALID_INTERVAL = (-1, -1)
+
 
 class SRASpecs(NamedTuple):
     """SRA file specifics and header definition."""
@@ -53,7 +75,7 @@ def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
     """Parses SRA file and returns data and ABTs as lists.
     Data are organized as a list of lists, the most external layer for the energy band,
     the most internal for the quadrant. According to this convention, the quadrant B (0),
-    high-energy band (2) shall is selected with `data[2][0]`
+    high-energy band (2) is selected with `data[2][0]`
 
     Raises a InvalidSRA if header file size value is larger than actual file size.
     Raises FileNotFoundError if filepath does not exist."""
@@ -86,17 +108,16 @@ def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
     return data, abts
 
 
-_INVALID_RANGE = (-1, -1)
 def ma_range(xs: Sequence[int], size: int) -> Interval:
     """Return first and last non-zero element, padded by the moving average window size."""
     n = len(xs)
     if n == 0:
-        return _INVALID_RANGE
+        return _INVALID_INTERVAL
     i = 0
     while i < n and xs[i] == 0:
         i += 1
     if i == n:
-        return _INVALID_RANGE
+        return _INVALID_INTERVAL
     j = n - 1
     while xs[j] == 0:
         j -= 1
@@ -104,7 +125,7 @@ def ma_range(xs: Sequence[int], size: int) -> Interval:
     j -= size - 1
     # `j - i` is the number of moving average values you get
     if j - i < 1:
-        return _INVALID_RANGE
+        return _INVALID_INTERVAL
     # interval closed at left, open to the right: iterate over range(i, j)
     return i, j
 
@@ -211,7 +232,7 @@ def search_qbdata(xs: Sequence[int], size: int, foreground_len: int, threshold: 
     """Launches transient search with moving average background estimate on one count time series.
     Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
     bs, vrange = moving_average(xs, size)
-    if vrange == _INVALID_RANGE:
+    if vrange == _INVALID_INTERVAL:
         return []
     t = TriggerDyadic(foreground_len=foreground_len, threshold=threshold)
     return t(xs, bs, vrange=vrange)
@@ -248,7 +269,7 @@ def search_filepath(
 
 
 def hit_tointerval(hit: Hit) -> Interval:
-    """Transforms a 2-tuple trigger hit (trigger time-index, window length) into an 2-tuple interval
+    """Transforms a 2-tuple trigger hit (trigger time-index, window length) into a 2-tuple interval
     (transient start index, trigger time index + 1)."""
     i, h = hit
     return i - h + 1, i + 1
@@ -261,48 +282,73 @@ def summarize(hits: Sequence[Hit]) -> Tuple[int, Interval]:
     if nhits > 0:
         starts, ends = zip(*[hit_tointerval(h) for h in hits])
         return nhits, (min(starts), max(ends))
-    return nhits, _INVALID_RANGE
+    return nhits, _INVALID_INTERVAL
 
-
-_SEARCH_SIZE_DEFAULT = 210
-_SEARCH_FORELEN_DEFAULT = 8
-_SEARCH_THRESHOLD_DEFAULT = 5.
-_SEARCH_CHECKS_DEFAULT = (
-    (EnBand.MID, Quadrant.B),
-    (EnBand.MID, Quadrant.C),
-    (EnBand.MID, Quadrant.D),
-    (EnBand.HIGH, Quadrant.B),
-    (EnBand.HIGH, Quadrant.C),
-    (EnBand.HIGH, Quadrant.D),
-)
 
 def main():
-    """Script interface."""
-    parser = argparse.ArgumentParser(description="...")
+    """Search SRA file for transient events and write results to output file.
+
+    Parses command-line arguments, runs the trigger algorithm on the specified
+    SRA file, and writes a summary to <filename>_trigger.txt if events are found.
+    Exit codes: 0 on success, 1 on invalid input file, 2 on invalid parameters.
+    """
+    parser = argparse.ArgumentParser(
+        description="Search for transient events in SpIRIT/HERMES-FM1 SRA data."
+    )
     parser.add_argument("filepath", help="Path to SRA file.")
+    parser.add_argument(
+        "--size",
+        type=int,
+        default=_SEARCH_SIZE_DEFAULT,
+        help=f"Moving average half-window size (default: {_SEARCH_SIZE_DEFAULT})."
+    )
+    parser.add_argument(
+        "--forelen",
+        type=int,
+        default=_SEARCH_FORELEN_DEFAULT,
+        help=f"Maximum trigger window length, must be power of 2 (default: {_SEARCH_FORELEN_DEFAULT})."
+    )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=_SEARCH_THRESHOLD_DEFAULT,
+        help=f"Detection threshold in sigma (default: {_SEARCH_THRESHOLD_DEFAULT})."
+    )
     args = parser.parse_args()
+
+    if args.size < 1:
+        print("Error: --size must be a positive integer.")
+        return ErrorCode.INVALID_PARAMETERS
+    if args.forelen < 1 or (args.forelen & (args.forelen - 1)) != 0:
+        print("Error: --forelen must be a positive power of 2.")
+        return ErrorCode.INVALID_PARAMETERS
+    if args.threshold <= 0:
+        print("Error: --threshold must be a positive number.")
+        return ErrorCode.INVALID_PARAMETERS
+
     filepath = Path(args.filepath)
 
     try:
         nhits, (start, end) = summarize(search_filepath(
             filepath,
             checks=_SEARCH_CHECKS_DEFAULT,
-            size=_SEARCH_SIZE_DEFAULT,
-            foreground_len=_SEARCH_FORELEN_DEFAULT,
-            threshold=_SEARCH_THRESHOLD_DEFAULT
+            size=args.size,
+            foreground_len=args.forelen,
+            threshold=args.threshold
         ))
     except FileNotFoundError:
         print("Input file does not exist. Goodbye.")
-        return
+        return ErrorCode.INVALID_FILE
     except InvalidSRA as e:
         print(f"Input SRA file is not valid: {e}")
-        return
+        return ErrorCode.INVALID_FILE
 
     if nhits > 0:
         out_filepath = filepath.parent / f"{filepath.stem}_trigger.txt"
         with open(out_filepath, "w") as f:
             f.write(f"{nhits} {start} {end}")
+    return ErrorCode.OK
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

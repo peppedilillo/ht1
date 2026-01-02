@@ -2,7 +2,7 @@
 Tests for moving_average function.
 """
 
-from fm1trig.search import moving_average, _INVALID_RANGE
+from fm1trig.search import moving_average, _INVALID_INTERVAL
 import pytest
 
 
@@ -12,7 +12,7 @@ def test_empty_data():
     size = 1
     sma, vrange = moving_average(data, size)
     assert sma == []
-    assert vrange == _INVALID_RANGE
+    assert vrange == _INVALID_INTERVAL
 
 
 def test_all_zeros():
@@ -21,7 +21,7 @@ def test_all_zeros():
     size = 1
     sma, vrange = moving_average(data, size)
     assert sma == []
-    assert vrange == _INVALID_RANGE
+    assert vrange == _INVALID_INTERVAL
 
 
 def test_data_too_short():
@@ -30,7 +30,7 @@ def test_data_too_short():
     size = 1
     sma, vrange = moving_average(data, size)
     assert sma == []
-    assert vrange == _INVALID_RANGE
+    assert vrange == _INVALID_INTERVAL
 
 
 def test_simple_sequence():
