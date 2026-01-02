@@ -8,7 +8,7 @@ setup(
     name="ht1",
     version="0.1",
     author="Giuseppe Dilillo",
-    classifiers=[  # Optional
+    classifiers=[
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.6",
@@ -16,7 +16,7 @@ setup(
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     python_requires=">=3.6",
-    extras_require={  # Optional
+    extras_require={
         "dev": [
             "pytest",
             "pyinstrument",
