@@ -8,23 +8,12 @@ from itertools import accumulate
 from math import log
 from collections import deque, Counter
 from pathlib import Path
-from typing import NamedTuple, Tuple, List, Sequence
+from typing import NamedTuple, Tuple, List, Sequence, Union
 from enum import Enum, IntEnum
 
 
-NQUADRANTS: int = 3
-NBANDS: int = 3
-
-class SRASpecs(NamedTuple):
-    """SRA file specifics and header definition."""
-    BLOCK_SIZE: int = 124
-    HEADER_SIZE: int = 33
-    FILELEN: Tuple[int, int] = (21, 25)
-    FILELEN_FMT: str = "=I"
-    ABT_SIZE: int = 4
-    ABT_FMT: str = "=I"
-    DATA_SIZE: int = 10
-    DATA_FMT: str = "10B"
+_NQUADRANTS: int = 3
+_NBANDS: int = 3
 
 class Quadrant(IntEnum):
     """Quadrant name/index"""
@@ -42,38 +31,54 @@ BandData = Tuple[List[int], ...]  # one list per quadrant
 Data = Tuple[BandData, ...]  # one BandData per band
 Hit = Tuple[int, int]  # trigger time-index, window length
 Index = Tuple[EnBand, Quadrant]  # band-quadrant combination index
-Range = Tuple[int, int]
+Interval = Tuple[int, int]
+
+class SRASpecs(NamedTuple):
+    """SRA file specifics and header definition."""
+    BLOCK_SIZE: int = 124
+    HEADER_SIZE: int = 33
+    FILELEN: Tuple[int, int] = (21, 25)
+    FILELEN_FMT: str = "=I"
+    ABT_SIZE: int = 4
+    ABT_FMT: str = "=I"
+    DATA_SIZE: int = 10
+    DATA_FMT: str = "10B"
 
 
-def sra_parse(filepath: Path) -> Tuple[Data, List[int]]:
+class InvalidSRA(Exception):
+    """An error raised when parsing invalid SRA files."""
+
+
+def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
     """Parses SRA file and returns data and ABTs as lists.
     Data are organized as a list of lists, the most external layer for the energy band,
     the most internal for the quadrant. According to this convention, the quadrant B (0),
     high-energy band (2) shall is selected with `data[2][0]`
 
-    Raises a ValueError if header file size value is larger than actual file size."""
+    Raises a InvalidSRA if header file size value is larger than actual file size.
+    Raises FileNotFoundError if filepath does not exist."""
     sra_specs = SRASpecs()
-    block_fmt = sra_specs.ABT_FMT + sra_specs.DATA_FMT * ((NQUADRANTS + 1) * NBANDS)
+    block_fmt = sra_specs.ABT_FMT + sra_specs.DATA_FMT * ((_NQUADRANTS + 1) * _NBANDS)
     block_struct = struct.Struct(block_fmt)
 
-    fsize = filepath.stat().st_size
+    fsize = Path(filepath).stat().st_size
     with open(filepath, "rb") as f:
         if fsize < sra_specs.HEADER_SIZE:
-            raise ValueError("File size smaller than header size.")
+            raise InvalidSRA("File size smaller than header size.")
         header = f.read(sra_specs.HEADER_SIZE)
         hfsize, = struct.unpack(sra_specs.FILELEN_FMT, header[slice(*sra_specs.FILELEN)])
         nblocks = (hfsize - sra_specs.HEADER_SIZE) // sra_specs.BLOCK_SIZE
         if nblocks * sra_specs.BLOCK_SIZE > fsize - sra_specs.HEADER_SIZE:
-            raise ValueError("Invalid header fsize.")
+            raise InvalidSRA("Invalid header fsize.")
         abts = [0] * nblocks
-        data = tuple(tuple([0] * (nblocks * sra_specs.DATA_SIZE) for _ in range(NQUADRANTS)) for _ in range(NBANDS))
+        data = tuple(tuple([0] * (nblocks * sra_specs.DATA_SIZE) for _ in range(_NQUADRANTS)) for _ in range(_NBANDS))
         for block in range(nblocks):
             values = block_struct.unpack(f.read(sra_specs.BLOCK_SIZE))
             abts[block] = values[0]
             offset = 1  # skip ABT
-            for band in range(NBANDS):
+            for band in range(_NBANDS):
                 offset += sra_specs.DATA_SIZE  # skip quadrant A
-                for quad in range(NQUADRANTS):
+                for quad in range(_NQUADRANTS):
                     start = block * sra_specs.DATA_SIZE
                     end = start + sra_specs.DATA_SIZE
                     data[band][quad][start:end] = values[offset:offset + sra_specs.DATA_SIZE]
@@ -82,19 +87,18 @@ def sra_parse(filepath: Path) -> Tuple[Data, List[int]]:
 
 
 _INVALID_RANGE = (-1, -1)
-def ma_range(data: Sequence[int], size: int) -> Range:
-    """Return range between first and last non-zero element, padded by the moving average window size.
-    In other words, this returns range over which moving average ran over presumably sane data."""
-    n = len(data)
+def ma_range(xs: Sequence[int], size: int) -> Interval:
+    """Return first and last non-zero element, padded by the moving average window size."""
+    n = len(xs)
     if n == 0:
         return _INVALID_RANGE
     i = 0
-    while i < n and data[i] == 0:
+    while i < n and xs[i] == 0:
         i += 1
     if i == n:
         return _INVALID_RANGE
     j = n - 1
-    while data[j] == 0:
+    while xs[j] == 0:
         j -= 1
     i += size
     j -= size - 1
@@ -105,10 +109,14 @@ def ma_range(data: Sequence[int], size: int) -> Range:
     return i, j
 
 
-def moving_average(data: Sequence[int], size: int) -> Tuple[List[float], Range]:
-    """Computes centered, simple moving average of `data`, at `2 * size + 1` window length."""
-    vrange = ma_range(data, size)
-    cumsum = [0] + list(accumulate(data))
+def moving_average(xs: Sequence[int], size: int) -> Tuple[List[float], Interval]:
+    """Computes centered, simple moving average of `data`, at `2 * size + 1` window length.
+    Raises ValueError if size parameter is not a positive integer."""
+    if size < 1:
+        raise ValueError("Parameter `size` should be a positive integer.")
+
+    vrange = ma_range(xs, size)
+    cumsum = [0] + list(accumulate(xs))
     sma = []
     window_len = 2 * size + 1
     for i in range(*vrange):
@@ -147,7 +155,7 @@ class TriggerDyadic:
         self.queue_x = deque([0.0], maxlen=foreground_len + 1)
         self.queue_b = deque([0.0], maxlen=foreground_len + 1)
 
-    def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Range) -> List[Hit]:
+    def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Interval) -> List[Hit]:
         """Runs algorithm on count data and associated background estimates."""
         hits = []
         for i, j in enumerate(range(*vrange)):
@@ -199,6 +207,16 @@ class TriggerDyadic:
             return []
 
 
+def search_qbdata(xs: Sequence[int], size: int, foreground_len: int, threshold: float) -> List[Hit]:
+    """Launches transient search with moving average background estimate on one count time series.
+    Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
+    bs, vrange = moving_average(xs, size)
+    if vrange == _INVALID_RANGE:
+        return []
+    t = TriggerDyadic(foreground_len=foreground_len, threshold=threshold)
+    return t(xs, bs, vrange=vrange)
+
+
 def search_data(
         data: Data,
         checks: Sequence[Index],
@@ -206,45 +224,84 @@ def search_data(
         foreground_len: int,
         threshold: float
 ) -> List[Hit]:
+    """Search data for transient events over all band/quadrant combinations specified by `checks`.
+    Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
     hits_counter = Counter()
     for band, quadrant in checks:
-        xs = data[band][quadrant]
-        bs, vrange = moving_average(xs, size)
-        if vrange == _INVALID_RANGE:
-            continue
-        trigger = TriggerDyadic(foreground_len=foreground_len, threshold=threshold)
-        for ih in trigger(xs, bs, vrange=vrange):
+        hits = search_qbdata(data[band][quadrant], size, foreground_len, threshold)
+        for ih in hits:
             hits_counter[ih] += 1
     return [ih for ih, count in hits_counter.items() if count == len(checks)]
 
 
-def search(
-        filepath: Path,
-        checks: Sequence[Index] = (
-            (EnBand.MID, Quadrant.B),
-            (EnBand.MID, Quadrant.C),
-            (EnBand.MID, Quadrant.D),
-            (EnBand.HIGH, Quadrant.B),
-            (EnBand.HIGH, Quadrant.C),
-            (EnBand.HIGH, Quadrant.D),
-        ),
-        size: int = 50,
-        foreground_len: int = 8,
-        threshold: float = 5.0,
+def search_filepath(
+        filepath: Union[Path, str],
+        checks: Sequence[Index],
+        size: int,
+        foreground_len: int,
+        threshold: float,
 ) -> List[Hit]:
+    """Search SRA file for transient events over all band/quadrant combinations specified by `checks`.
+    Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
     data, abts = sra_parse(filepath)
     return search_data(data, checks, size, foreground_len, threshold)
 
+
+def hit_tointerval(hit: Hit) -> Interval:
+    """Transforms a 2-tuple trigger hit (trigger time-index, window length) into an 2-tuple interval
+    (transient start index, trigger time index + 1)."""
+    i, h = hit
+    return i - h + 1, i + 1
+
+
+def summarize(hits: Sequence[Hit]) -> Tuple[int, Interval]:
+    """Summarize a list of trigger hits. Returns number of hits, and 2-tuple interval
+    (earliest transient start index, latest trigger time index + 1)."""
+    nhits = len(hits)
+    if nhits > 0:
+        starts, ends = zip(*[hit_tointerval(h) for h in hits])
+        return nhits, (min(starts), max(ends))
+    return nhits, _INVALID_RANGE
+
+
+_SEARCH_SIZE_DEFAULT = 210
+_SEARCH_FORELEN_DEFAULT = 8
+_SEARCH_THRESHOLD_DEFAULT = 5.
+_SEARCH_CHECKS_DEFAULT = (
+    (EnBand.MID, Quadrant.B),
+    (EnBand.MID, Quadrant.C),
+    (EnBand.MID, Quadrant.D),
+    (EnBand.HIGH, Quadrant.B),
+    (EnBand.HIGH, Quadrant.C),
+    (EnBand.HIGH, Quadrant.D),
+)
 
 def main():
     """Script interface."""
     parser = argparse.ArgumentParser(description="...")
     parser.add_argument("filepath", help="Path to SRA file.")
     args = parser.parse_args()
-
     filepath = Path(args.filepath)
-    data, abts = sra_parse(filepath)
-    ...
+
+    try:
+        nhits, (start, end) = summarize(search_filepath(
+            filepath,
+            checks=_SEARCH_CHECKS_DEFAULT,
+            size=_SEARCH_SIZE_DEFAULT,
+            foreground_len=_SEARCH_FORELEN_DEFAULT,
+            threshold=_SEARCH_THRESHOLD_DEFAULT
+        ))
+    except FileNotFoundError:
+        print("Input file does not exist. Goodbye.")
+        return
+    except InvalidSRA as e:
+        print(f"Input SRA file is not valid: {e}")
+        return
+
+    if nhits > 0:
+        out_filepath = filepath.parent / f"{filepath.stem}_trigger.txt"
+        with open(out_filepath, "w") as f:
+            f.write(f"{nhits} {start} {end}")
 
 
 if __name__ == "__main__":

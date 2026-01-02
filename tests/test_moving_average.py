@@ -3,6 +3,7 @@ Tests for moving_average function.
 """
 
 from fm1trig.search import moving_average, _INVALID_RANGE
+import pytest
 
 
 def test_empty_data():
@@ -86,9 +87,9 @@ def test_size_zero():
     # i=3: avg(2) = 2.0
     expected_sma = [3.0, 7.0, 2.0]
     expected_vrange = (1, 4)
-    sma, vrange = moving_average(data, size)
-    assert sma == expected_sma
-    assert vrange == expected_vrange
+    with pytest.raises(ValueError) as exc_info:
+        moving_average(data, size)
+    assert "Parameter `size` should be a positive integer." in str(exc_info.value)
 
 
 def test_larger_window():
