@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from fm1trig.search import ErrorCode
+from ht1.ht1 import ErrorCode
 
 
 TEST_DATA_DIR = Path(__file__).parent / "data"
@@ -19,9 +19,10 @@ TEST_FILES = list(TEST_DATA_DIR.glob("**/SRA/*.raw"))
 def run_main(*args):
     """Run search.py as subprocess with given arguments."""
     result = subprocess.run(
-        [sys.executable, "-m", "fm1trig.search", *args],
-        capture_output=True,
-        text=True,
+        [sys.executable, "-m", "ht1.ht1", *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        universal_newlines=True,
     )
     return result
 
@@ -139,29 +140,29 @@ def test_main_invalid_size_negative(tmp_path):
     assert result.returncode == ErrorCode.INVALID_PARAMETERS
 
 
-def test_main_invalid_forelen_not_power_of_2(tmp_path):
-    """--forelen 3 (not power of 2) returns INVALID_PARAMETERS error code."""
+def test_main_invalid_maxtest_not_power_of_2(tmp_path):
+    """--maxtest 3 (not power of 2) returns INVALID_PARAMETERS error code."""
     if not TEST_FILES:
         pytest.skip("No test files available")
 
     tmp_file = tmp_path / TEST_FILES[0].name
     shutil.copy(TEST_FILES[0], tmp_file)
 
-    result = run_main(str(tmp_file), "--forelen", "3")
+    result = run_main(str(tmp_file), "--maxtest", "3")
 
     assert result.returncode == ErrorCode.INVALID_PARAMETERS
-    assert "--forelen" in result.stdout
+    assert "--maxtest" in result.stdout
 
 
-def test_main_invalid_forelen_zero(tmp_path):
-    """--forelen 0 returns INVALID_PARAMETERS error code."""
+def test_main_invalid_maxtest_zero(tmp_path):
+    """--maxtest 0 returns INVALID_PARAMETERS error code."""
     if not TEST_FILES:
         pytest.skip("No test files available")
 
     tmp_file = tmp_path / TEST_FILES[0].name
     shutil.copy(TEST_FILES[0], tmp_file)
 
-    result = run_main(str(tmp_file), "--forelen", "0")
+    result = run_main(str(tmp_file), "--maxtest", "0")
 
     assert result.returncode == ErrorCode.INVALID_PARAMETERS
 
@@ -196,7 +197,7 @@ def test_main_invalid_threshold_negative(tmp_path):
 # --- Custom parameter tests ---
 
 def test_main_custom_parameters(tmp_path):
-    """Main accepts custom size, forelen, and threshold."""
+    """Main accepts custom size, maxtest, and threshold."""
     if not TEST_FILES:
         pytest.skip("No test files available")
 
@@ -206,7 +207,7 @@ def test_main_custom_parameters(tmp_path):
     result = run_main(
         str(tmp_file),
         "--size", "100",
-        "--forelen", "16",
+        "--maxtest", "16",
         "--threshold", "4.0"
     )
 

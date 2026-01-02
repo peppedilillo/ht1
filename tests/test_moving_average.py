@@ -2,7 +2,7 @@
 Tests for moving_average function.
 """
 
-from fm1trig.search import moving_average, _INVALID_INTERVAL
+from ht1.ht1 import moving_average, _INVALID_INTERVAL
 import pytest
 
 

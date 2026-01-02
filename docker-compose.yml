@@ -1,8 +1,8 @@
 services:
   dev:
     build: .
-    image: fm1trig-dev:latest
-    container_name: fm1trig-dev
+    image: ht1-dev:latest
+    container_name: ht1-dev
     volumes:
       - .:/workspace
     working_dir: /workspace

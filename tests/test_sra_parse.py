@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from fm1trig.search import sra_parse, _NQUADRANTS, _NBANDS, InvalidSRA
+from ht1.ht1 import sra_parse, _NQUADRANTS, _NBANDS, InvalidSRA
 
 
 def test_sra_parse_all_files():

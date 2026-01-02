@@ -2,7 +2,7 @@
 Tests for data_valid_range function.
 """
 
-from fm1trig.search import ma_range, _INVALID_INTERVAL
+from ht1.ht1 import ma_range, _INVALID_INTERVAL
 
 
 def test_empty_data():

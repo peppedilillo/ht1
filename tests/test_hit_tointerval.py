@@ -2,7 +2,7 @@
 Tests for hit_tointerval function.
 """
 
-from fm1trig.search import hit_tointerval
+from ht1.ht1 import hit_tointerval
 
 
 def test_single_bin_hit():

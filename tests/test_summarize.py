@@ -2,7 +2,7 @@
 Tests for summarize function.
 """
 
-from fm1trig.search import summarize, _INVALID_INTERVAL
+from ht1.ht1 import summarize, _INVALID_INTERVAL
 
 
 def test_empty_hits():

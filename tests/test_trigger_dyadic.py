@@ -2,24 +2,24 @@
 Tests for TriggerDyadic class.
 """
 from math import sqrt
-from fm1trig.search import TriggerDyadic, TriggerStatus
+from ht1.ht1 import TriggerDyadic, TriggerStatus
 
 
 def test_initial_status_is_acquiring():
     """Trigger starts in ACQUIRING status."""
-    t = TriggerDyadic(foreground_len=4, threshold=5.0)
+    t = TriggerDyadic(maxtest=4, threshold=5.0)
     assert t.status() == TriggerStatus.ACQUIRING
 
 
 def test_threshold_conversion():
     """Threshold sigma is converted to half-squared LLR."""
-    t = TriggerDyadic(foreground_len=4, threshold=5.0)
+    t = TriggerDyadic(maxtest=4, threshold=5.0)
     assert t.llr_threshold_halfsq == 0.5 * (5.0 ** 2)
 
 
 def test_transition_to_running():
     """After foreground_len+1 steps, status transitions to RUNNING."""
-    t = TriggerDyadic(foreground_len=4, threshold=5.0)
+    t = TriggerDyadic(maxtest=4, threshold=5.0)
 
     # Feed foreground_len steps - should still be acquiring after foreground_len-1
     for _ in range(4):
@@ -31,7 +31,7 @@ def test_transition_to_running():
 
 def test_no_trigger_on_quiet_data():
     """Constant counts equal to background should produce no triggers."""
-    t = TriggerDyadic(foreground_len=4, threshold=3.0)
+    t = TriggerDyadic(maxtest=4, threshold=3.0)
 
     # 20 steps of quiet data: counts = background = 10
     xs = [10] * 20
@@ -44,7 +44,7 @@ def test_no_trigger_on_quiet_data():
 
 def test_no_trigger_during_acquiring():
     """No triggers should be produced while in ACQUIRING status."""
-    t = TriggerDyadic(foreground_len=8, threshold=3.0)
+    t = TriggerDyadic(maxtest=8, threshold=3.0)
 
     # Insert a huge spike during acquisition phase
     xs = [10, 10, 500, 500, 10, 10, 10, 10]  # spike at indices 2,3
@@ -58,7 +58,7 @@ def test_no_trigger_during_acquiring():
 
 def test_obvious_transient_single_bin():
     """A large single-bin spike should trigger."""
-    t = TriggerDyadic(foreground_len=4, threshold=5.0)
+    t = TriggerDyadic(maxtest=4, threshold=5.0)
 
     # Background: 10 counts per bin
     # Spike: 200 counts at index 10
@@ -81,7 +81,7 @@ def test_obvious_transient_single_bin():
 
 def test_threshold():
     """Check that we trigger over a bin just a bit above the threshold."""
-    t = TriggerDyadic(foreground_len=4, threshold=5.0)
+    t = TriggerDyadic(maxtest=4, threshold=5.0)
 
     # Background: 10 counts per bin
     # Spike: 200 counts at index 10
@@ -99,7 +99,7 @@ def test_threshold():
 
 def test_obvious_transient_multi_bin():
     """A sustained transient over multiple bins should trigger with larger windows."""
-    t = TriggerDyadic(foreground_len=8, threshold=5.0)
+    t = TriggerDyadic(maxtest=8, threshold=5.0)
 
     # Background: 10 counts per bin
     # Sustained transient: 100 counts at indices 12-15 (4 bins)
@@ -122,7 +122,7 @@ def test_obvious_transient_multi_bin():
 
 def test_hit_time_indices_in_range():
     """All hit time indices should be within the valid range."""
-    t = TriggerDyadic(foreground_len=4, threshold=5.0)
+    t = TriggerDyadic(maxtest=4, threshold=5.0)
 
     xs = [10] * 20
     xs[12] = 200
@@ -137,7 +137,7 @@ def test_hit_time_indices_in_range():
 
 def test_accumulator_correctness():
     """Verify accumulators sum correctly."""
-    t = TriggerDyadic(foreground_len=4, threshold=0.0)
+    t = TriggerDyadic(maxtest=4, threshold=0.0)
 
     xs = [1, 2, 3, 4, 5]
     bs = [0.5, 1.0, 1.5, 2.0, 2.5]
@@ -151,7 +151,7 @@ def test_accumulator_correctness():
 
 def test_no_false_positives_on_fluctuations():
     """Small fluctuations around background should not trigger at high threshold."""
-    t = TriggerDyadic(foreground_len=8, threshold=5.0)
+    t = TriggerDyadic(maxtest=8, threshold=5.0)
 
     # Background 50, small fluctuations +/- 10
     xs = [50, 55, 45, 52, 48, 53, 47, 51, 49, 54, 46, 52, 48, 55, 45, 50,
@@ -167,7 +167,7 @@ def test_marginal_excess_below_threshold():
     """An excess just below threshold should not trigger."""
     # threshold=5 means llr_threshold = 12.5
     # For a very mild excess that doesn't cross threshold
-    t = TriggerDyadic(foreground_len=4, threshold=5.0)
+    t = TriggerDyadic(maxtest=4, threshold=5.0)
 
     # Very mild excess: 12 vs background 10
     xs = [10] * 20
@@ -181,7 +181,7 @@ def test_marginal_excess_below_threshold():
 
 def test_call_interface():
     """Test the __call__ interface returns expected structure."""
-    t = TriggerDyadic(foreground_len=4, threshold=5.0)
+    t = TriggerDyadic(maxtest=4, threshold=5.0)
 
     xs = [10] * 15
     xs[10] = 200

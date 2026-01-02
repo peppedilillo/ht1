@@ -3,7 +3,7 @@ Tests for significance function.
 """
 
 from math import log, sqrt
-from fm1trig.search import significance
+from ht1.ht1 import significance
 
 
 def test_x_equal_b():

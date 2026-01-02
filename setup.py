@@ -3,7 +3,7 @@ import pathlib
 
 here = pathlib.Path(__file__).parent.resolve()
 setup(
-    name="fm1trig",
+    name="ht1",
     version="0.1",
     author="Giuseppe Dilillo",
     classifiers=[  # Optional

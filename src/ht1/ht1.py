@@ -41,7 +41,7 @@ _NQUADRANTS: int = 3
 _NBANDS: int = 3
 
 _SEARCH_SIZE_DEFAULT = 210
-_SEARCH_FORELEN_DEFAULT = 8
+_SEARCH_MAXTEST_DEFAULT = 8
 _SEARCH_THRESHOLD_DEFAULT = 5.
 _SEARCH_CHECKS_DEFAULT = (
     (EnBand.MID, Quadrant.B),
@@ -164,17 +164,17 @@ class TriggerDyadic:
     """Dyadic windowed trigger algorithm for detecting excess in Poisson count series.
     Searches for segments with significance exceeding threshold using power-of-2 window sizes."""
 
-    def __init__(self, foreground_len: int, threshold: float):
+    def __init__(self, maxtest: int, threshold: float):
         """Initializes trigger with test maximum window size and detection threshold.
         The threshold is interpreted as sigma and internally converted to half-squared LLR."""
-        self.foreground_len = foreground_len
+        self.maxtest = maxtest
         self.llr_threshold_halfsq = 0.5 * (threshold ** 2)
 
         self.phase_counter = -1
         self.acc_x = 0.0
         self.acc_b = 0.0
-        self.queue_x = deque([0.0], maxlen=foreground_len + 1)
-        self.queue_b = deque([0.0], maxlen=foreground_len + 1)
+        self.queue_x = deque([0.0], maxlen=maxtest + 1)
+        self.queue_b = deque([0.0], maxlen=maxtest + 1)
 
     def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Interval) -> List[Hit]:
         """Runs algorithm on count data and associated background estimates."""
@@ -193,7 +193,7 @@ class TriggerDyadic:
         Uses phase_counter optimization: a window with length 8 is checked once every 8 calls."""
         hs = []
         h = 1
-        while h <= self.foreground_len:
+        while h <= self.maxtest:
             # checking `2 * self.phase_counter % h` results in window length h being tested *2* times over h calls.
             if self.phase_counter % h:
                 break
@@ -217,7 +217,7 @@ class TriggerDyadic:
             self.queue_b.popleft()
             self.queue_x.append(self.acc_x)
             self.queue_b.append(self.acc_b)
-            self.phase_counter = (self.phase_counter + 1) % self.foreground_len
+            self.phase_counter = (self.phase_counter + 1) % self.maxtest
             return hs
 
         else:
@@ -228,13 +228,13 @@ class TriggerDyadic:
             return []
 
 
-def search_qbdata(xs: Sequence[int], size: int, foreground_len: int, threshold: float) -> List[Hit]:
+def search_qbdata(xs: Sequence[int], size: int, maxtest: int, threshold: float) -> List[Hit]:
     """Launches transient search with moving average background estimate on one count time series.
     Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
     bs, vrange = moving_average(xs, size)
     if vrange == _INVALID_INTERVAL:
         return []
-    t = TriggerDyadic(foreground_len=foreground_len, threshold=threshold)
+    t = TriggerDyadic(maxtest=maxtest, threshold=threshold)
     return t(xs, bs, vrange=vrange)
 
 
@@ -242,14 +242,14 @@ def search_data(
         data: Data,
         checks: Sequence[Index],
         size: int,
-        foreground_len: int,
+        maxtest: int,
         threshold: float
 ) -> List[Hit]:
     """Search data for transient events over all band/quadrant combinations specified by `checks`.
     Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
     hits_counter = Counter()
     for band, quadrant in checks:
-        hits = search_qbdata(data[band][quadrant], size, foreground_len, threshold)
+        hits = search_qbdata(data[band][quadrant], size, maxtest, threshold)
         for ih in hits:
             hits_counter[ih] += 1
     return [ih for ih, count in hits_counter.items() if count == len(checks)]
@@ -259,13 +259,13 @@ def search_filepath(
         filepath: Union[Path, str],
         checks: Sequence[Index],
         size: int,
-        foreground_len: int,
+        maxtest: int,
         threshold: float,
 ) -> List[Hit]:
     """Search SRA file for transient events over all band/quadrant combinations specified by `checks`.
     Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
     data, abts = sra_parse(filepath)
-    return search_data(data, checks, size, foreground_len, threshold)
+    return search_data(data, checks, size, maxtest, threshold)
 
 
 def hit_tointerval(hit: Hit) -> Interval:
@@ -300,27 +300,27 @@ def main():
         "--size",
         type=int,
         default=_SEARCH_SIZE_DEFAULT,
-        help=f"Moving average half-window size (default: {_SEARCH_SIZE_DEFAULT})."
+        help=f"moving average half-window size (default: {_SEARCH_SIZE_DEFAULT})."
     )
     parser.add_argument(
-        "--forelen",
+        "--maxtest",
         type=int,
-        default=_SEARCH_FORELEN_DEFAULT,
-        help=f"Maximum trigger window length, must be power of 2 (default: {_SEARCH_FORELEN_DEFAULT})."
+        default=_SEARCH_MAXTEST_DEFAULT,
+        help=f"maximum trigger window length, must be power of 2 (default: {_SEARCH_MAXTEST_DEFAULT})."
     )
     parser.add_argument(
         "--threshold",
         type=float,
         default=_SEARCH_THRESHOLD_DEFAULT,
-        help=f"Detection threshold in sigma (default: {_SEARCH_THRESHOLD_DEFAULT})."
+        help=f"detection threshold in standard deviation units (default: {_SEARCH_THRESHOLD_DEFAULT})."
     )
     args = parser.parse_args()
 
     if args.size < 1:
         print("Error: --size must be a positive integer.")
         return ErrorCode.INVALID_PARAMETERS
-    if args.forelen < 1 or (args.forelen & (args.forelen - 1)) != 0:
-        print("Error: --forelen must be a positive power of 2.")
+    if args.maxtest < 1 or (args.maxtest & (args.maxtest - 1)) != 0:
+        print("Error: --maxtest must be a positive power of 2.")
         return ErrorCode.INVALID_PARAMETERS
     if args.threshold <= 0:
         print("Error: --threshold must be a positive number.")
@@ -333,7 +333,7 @@ def main():
             filepath,
             checks=_SEARCH_CHECKS_DEFAULT,
             size=args.size,
-            foreground_len=args.forelen,
+            maxtest=args.maxtest,
             threshold=args.threshold
         ))
     except FileNotFoundError:
