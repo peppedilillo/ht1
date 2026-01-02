@@ -2,7 +2,8 @@
 Tests for summarize function.
 """
 
-from ht1.ht1 import summarize, _INVALID_INTERVAL
+from ht1.ht1 import _INVALID_INTERVAL
+from ht1.ht1 import summarize
 
 
 def test_empty_hits():

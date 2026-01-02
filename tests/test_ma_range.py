@@ -2,7 +2,8 @@
 Tests for data_valid_range function.
 """
 
-from ht1.ht1 import ma_range, _INVALID_INTERVAL
+from ht1.ht1 import _INVALID_INTERVAL
+from ht1.ht1 import ma_range
 
 
 def test_empty_data():

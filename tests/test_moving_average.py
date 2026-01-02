@@ -2,8 +2,10 @@
 Tests for moving_average function.
 """
 
-from ht1.ht1 import moving_average, _INVALID_INTERVAL
 import pytest
+
+from ht1.ht1 import _INVALID_INTERVAL
+from ht1.ht1 import moving_average
 
 
 def test_empty_data():
@@ -129,9 +131,9 @@ def test_non_integer_averages():
     sma, vrange = moving_average(data, size)
     assert vrange == expected_vrange
     assert len(sma) == 3
-    assert abs(sma[0] - 7/3) < 1e-10
-    assert abs(sma[1] - 11/3) < 1e-10
-    assert abs(sma[2] - 16/3) < 1e-10
+    assert abs(sma[0] - 7 / 3) < 1e-10
+    assert abs(sma[1] - 11 / 3) < 1e-10
+    assert abs(sma[2] - 16 / 3) < 1e-10
 
 
 def test_zeros_in_middle():

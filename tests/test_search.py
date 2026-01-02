@@ -3,19 +3,18 @@ Tests for search_qbdata, search_data, and search_filepath functions.
 """
 
 from pathlib import Path
+
 import pytest
 
-from ht1.ht1 import (
-    search_qbdata,
-    search_data,
-    search_filepath,
-    InvalidSRA,
-    Quadrant,
-    EnBand,
-)
-
+from ht1.ht1 import EnBand
+from ht1.ht1 import InvalidSRA
+from ht1.ht1 import Quadrant
+from ht1.ht1 import search_data
+from ht1.ht1 import search_filepath
+from ht1.ht1 import search_qbdata
 
 # --- search_qbdata tests ---
+
 
 def test_search_qbdata_empty_data():
     """Empty data returns empty hits."""
@@ -57,14 +56,12 @@ def test_search_qbdata_with_transient():
 
 # --- search_data tests ---
 
+
 def _make_test_data(npoints, transient_idx=None, transient_value=500):
     """Helper to create test Data structure with optional transient."""
     # Data structure: data[band][quadrant] = list of counts
     # 3 bands, 3 quadrants
-    data = tuple(
-        tuple([10] * npoints for _ in range(3))
-        for _ in range(3)
-    )
+    data = tuple(tuple([10] * npoints for _ in range(3)) for _ in range(3))
     if transient_idx is not None:
         # Insert transient in all bands and quadrants
         for band in range(3):
@@ -103,10 +100,7 @@ def test_search_data_coincidence_all_match():
 def test_search_data_coincidence_partial_match():
     """Hits only in some checks are filtered out."""
     # Create data with transient only in one quadrant
-    data = tuple(
-        tuple([10] * 500 for _ in range(3))
-        for _ in range(3)
-    )
+    data = tuple(tuple([10] * 500 for _ in range(3)) for _ in range(3))
     # Insert transient only in quadrant B, band MID
     data[EnBand.MID][Quadrant.B][300] = 500
 
@@ -133,10 +127,7 @@ def test_search_data_quiet_all_checks():
 
 def test_search_data_different_transient_times():
     """Transients at different times in different checks don't coincide."""
-    data = tuple(
-        tuple([10] * 500 for _ in range(3))
-        for _ in range(3)
-    )
+    data = tuple(tuple([10] * 500 for _ in range(3)) for _ in range(3))
     # Transient at different times in different quadrants
     data[EnBand.MID][Quadrant.B][300] = 500
     data[EnBand.MID][Quadrant.C][350] = 500  # different time
@@ -159,11 +150,7 @@ def test_search_filepath_file_not_found():
     """Non-existent file raises FileNotFoundError."""
     with pytest.raises(FileNotFoundError):
         search_filepath(
-            Path("/nonexistent/path/file.raw"),
-            checks=[(EnBand.MID, Quadrant.B)],
-            size=20,
-            maxtest=8,
-            threshold=5.0
+            Path("/nonexistent/path/file.raw"), checks=[(EnBand.MID, Quadrant.B)], size=20, maxtest=8, threshold=5.0
         )
 
 
@@ -174,13 +161,7 @@ def test_search_filepath_invalid_sra(tmp_path):
     bad_file.write_bytes(b"short")
 
     with pytest.raises(InvalidSRA):
-        search_filepath(
-            bad_file,
-            checks=[(EnBand.MID, Quadrant.B)],
-            size=20,
-            maxtest=8,
-            threshold=5.0
-        )
+        search_filepath(bad_file, checks=[(EnBand.MID, Quadrant.B)], size=20, maxtest=8, threshold=5.0)
 
 
 def test_search_filepath_with_real_data():

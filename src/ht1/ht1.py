@@ -1,34 +1,46 @@
 """
-A program for searching transients in SpIRIT/HERMES-FM1 SRA data.
+A program and module for searching transients in SpIRIT/HERMES-FM1 SRA data.
+
+Author: Giuseppe Dilillo
+Date: January 2026
 """
 
 import argparse
-import struct
-import sys
+from collections import Counter
+from collections import deque
+from enum import Enum
+from enum import IntEnum
 from itertools import accumulate
 from math import log
-from collections import deque, Counter
 from pathlib import Path
-from typing import NamedTuple, Tuple, List, Sequence, Union
-from enum import Enum, IntEnum
+import struct
+import sys
+from typing import List, NamedTuple, Sequence, Tuple, Union
 
 
 class Quadrant(IntEnum):
-    """Quadrant name/index"""
+    """Quadrant identifier mapping names to indices."""
+
     B = 0
     C = 1
     D = 2
 
+
 class EnBand(IntEnum):
-    """Energy band name/index"""
+    """Energy band identifier mapping names to indices."""
+
     LOW = 0
     MID = 1
     HIGH = 2
 
+
 class ErrorCode(IntEnum):
+    """Exit codes returned by the main script."""
+
     OK = 0
     INVALID_FILE = 1
     INVALID_PARAMETERS = 2
+
 
 BandData = Tuple[List[int], ...]  # one list per quadrant
 Data = Tuple[BandData, ...]  # one BandData per band
@@ -42,7 +54,7 @@ _NBANDS: int = 3
 
 _SEARCH_SIZE_DEFAULT = 210
 _SEARCH_MAXTEST_DEFAULT = 8
-_SEARCH_THRESHOLD_DEFAULT = 5.
+_SEARCH_THRESHOLD_DEFAULT = 5.0
 _SEARCH_CHECKS_DEFAULT = (
     (EnBand.MID, Quadrant.B),
     (EnBand.MID, Quadrant.C),
@@ -56,7 +68,8 @@ _INVALID_INTERVAL = (-1, -1)
 
 
 class SRASpecs(NamedTuple):
-    """SRA file specifics and header definition."""
+    """SRA file format specification and header layout constants."""
+
     BLOCK_SIZE: int = 124
     HEADER_SIZE: int = 33
     FILELEN: Tuple[int, int] = (21, 25)
@@ -72,13 +85,24 @@ class InvalidSRA(Exception):
 
 
 def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
-    """Parses SRA file and returns data and ABTs as lists.
-    Data are organized as a list of lists, the most external layer for the energy band,
-    the most internal for the quadrant. According to this convention, the quadrant B (0),
-    high-energy band (2) is selected with `data[2][0]`
+    """Parse an SRA file and extract count data and timestamps.
 
-    Raises a InvalidSRA if header file size value is larger than actual file size.
-    Raises FileNotFoundError if filepath does not exist."""
+    Data are organized as nested tuples: the outer level indexes energy band,
+    the inner level indexes quadrant. For example, `data[2][0]` selects
+    quadrant B (index 0) in the high-energy band (index 2).
+
+    Args:
+        filepath: Path to the SRA file.
+
+    Returns:
+        A tuple containing:
+            - data: Nested tuple of count lists indexed by (band, quadrant).
+            - abts: List of ABT timestamps, one per data block.
+
+    Raises:
+        InvalidSRA: If the file is malformed or header size exceeds actual size.
+        FileNotFoundError: If the file does not exist.
+    """
     sra_specs = SRASpecs()
     block_fmt = sra_specs.ABT_FMT + sra_specs.DATA_FMT * ((_NQUADRANTS + 1) * _NBANDS)
     block_struct = struct.Struct(block_fmt)
@@ -88,7 +112,7 @@ def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
         if fsize < sra_specs.HEADER_SIZE:
             raise InvalidSRA("File size smaller than header size.")
         header = f.read(sra_specs.HEADER_SIZE)
-        hfsize, = struct.unpack(sra_specs.FILELEN_FMT, header[slice(*sra_specs.FILELEN)])
+        (hfsize,) = struct.unpack(sra_specs.FILELEN_FMT, header[slice(*sra_specs.FILELEN)])
         nblocks = (hfsize - sra_specs.HEADER_SIZE) // sra_specs.BLOCK_SIZE
         if nblocks * sra_specs.BLOCK_SIZE > fsize - sra_specs.HEADER_SIZE:
             raise InvalidSRA("Invalid header fsize.")
@@ -103,13 +127,26 @@ def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
                 for quad in range(_NQUADRANTS):
                     start = block * sra_specs.DATA_SIZE
                     end = start + sra_specs.DATA_SIZE
-                    data[band][quad][start:end] = values[offset:offset + sra_specs.DATA_SIZE]
+                    data[band][quad][start:end] = values[offset : offset + sra_specs.DATA_SIZE]
                     offset += sra_specs.DATA_SIZE
     return data, abts
 
 
 def ma_range(xs: Sequence[int], size: int) -> Interval:
-    """Return first and last non-zero element, padded by the moving average window size."""
+    """Compute the valid range for moving average calculation.
+
+    Finds the first and last non-zero elements in the sequence and returns
+    an interval padded inward by the window half-size to ensure all values
+    in the range have complete windows.
+
+    Args:
+        xs: Input sequence of integer counts.
+        size: Half-window size for the moving average.
+
+    Returns:
+        A tuple (start, end) defining the valid range, or (-1, -1) if
+        the sequence is empty, all zeros, or too short for the window.
+    """
     n = len(xs)
     if n == 0:
         return _INVALID_INTERVAL
@@ -131,8 +168,22 @@ def ma_range(xs: Sequence[int], size: int) -> Interval:
 
 
 def moving_average(xs: Sequence[int], size: int) -> Tuple[List[float], Interval]:
-    """Computes centered, simple moving average of `data`, at `2 * size + 1` window length.
-    Raises ValueError if size parameter is not a positive integer."""
+    """Compute a centered simple moving average over the valid data range.
+
+    Uses a window of length `2 * size + 1` centered on each point.
+
+    Args:
+        xs: Input sequence of integer counts.
+        size: Half-window size (full window is `2 * size + 1`).
+
+    Returns:
+        A tuple containing:
+            - sma: List of moving average values.
+            - vrange: The (start, end) interval over which averages were computed.
+
+    Raises:
+        ValueError: If size is not a positive integer.
+    """
     if size < 1:
         raise ValueError("Parameter `size` should be a positive integer.")
 
@@ -148,27 +199,50 @@ def moving_average(xs: Sequence[int], size: int) -> Tuple[List[float], Interval]
 
 class TriggerStatus(Enum):
     """Status of the trigger algorithm: ACQUIRING initial data or RUNNING detection."""
+
     ACQUIRING = 0
     RUNNING = 1
 
 
 def significance(x: float, b: float) -> float:
-    """Returns half-squared Poisson log-likelihood ratio.
-    Only returns positive values for excesses (x > b)."""
+    """Compute the half-squared Poisson log-likelihood ratio.
+
+    Measures statistical significance of an observed count excess over
+    expected background. Returns zero for deficits or invalid inputs.
+
+    Args:
+        x: Observed count.
+        b: Expected background count.
+
+    Returns:
+        The half-squared log-likelihood ratio, or 0.0 if x <= b or b <= 0.
+    """
     if x <= b or b <= 0:
         return 0.0
     return x * log(x / b) - (x - b)
 
 
 class TriggerDyadic:
-    """Dyadic windowed trigger algorithm for detecting excess in Poisson count series.
-    Searches for segments with significance exceeding threshold using power-of-2 window sizes."""
+    """Dyadic windowed trigger algorithm for detecting excesses in Poisson count series.
+
+    Searches for time segments where significance exceeds a threshold using
+    power-of-2 window sizes (1, 2, 4, 8, ...).
+
+    Attributes:
+        maxtest: Maximum window size to test (must be power of 2).
+        llr_threshold_halfsq: Detection threshold as half-squared LLR.
+    """
 
     def __init__(self, maxtest: int, threshold: float):
-        """Initializes trigger with test maximum window size and detection threshold.
-        The threshold is interpreted as sigma and internally converted to half-squared LLR."""
+        """Initialize the trigger algorithm.
+
+        Args:
+            maxtest: Maximum window size to test (must be power of 2).
+            threshold: Detection threshold in sigma units (converted internally
+                to half-squared log-likelihood ratio).
+        """
         self.maxtest = maxtest
-        self.llr_threshold_halfsq = 0.5 * (threshold ** 2)
+        self.llr_threshold_halfsq = 0.5 * (threshold**2)
 
         self.phase_counter = -1
         self.acc_x = 0.0
@@ -177,20 +251,38 @@ class TriggerDyadic:
         self.queue_b = deque([0.0], maxlen=maxtest + 1)
 
     def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Interval) -> List[Hit]:
-        """Runs algorithm on count data and associated background estimates."""
+        """Run the trigger algorithm on count data with background estimates.
+
+        Args:
+            xs: Observed count sequence.
+            bs: Background estimate sequence (same length as valid range).
+            vrange: The (start, end) interval to process.
+
+        Returns:
+            List of hits as (time_index, window_length) tuples.
+        """
         hits = []
         for i, j in enumerate(range(*vrange)):
             hits.extend([(j, h) for h in self.step(xs[j], bs[i])])
         return hits
 
     def status(self) -> TriggerStatus:
-        """Returns current status: ACQUIRING if still collecting initial data, RUNNING otherwise."""
+        """Return the current trigger status.
+
+        Returns:
+            ACQUIRING if still collecting initial data, RUNNING otherwise.
+        """
         return TriggerStatus.RUNNING if self.phase_counter >= 0 else TriggerStatus.ACQUIRING
 
     def maximize(self) -> List[int]:
-        """Checks dyadic window sizes (1, 2, 4, 8...) ending at current time.
-        Returns list of window sizes that exceed significance threshold.
-        Uses phase_counter optimization: a window with length 8 is checked once every 8 calls."""
+        """Check dyadic window sizes ending at current time for statistically significant excess.
+
+        Tests windows of size 1, 2, 4, 8, ... up to maxtest. Uses phase_counter
+        optimization: a window of length h is tested once every h calls.
+
+        Returns:
+            List of window sizes that exceed the significance threshold.
+        """
         hs = []
         h = 1
         while h <= self.maxtest:
@@ -205,8 +297,16 @@ class TriggerDyadic:
         return hs
 
     def step(self, x: float, b: float) -> List[int]:
-        """Processes one time step with observed count x_t and background estimate b_t.
-        Returns list of window sizes that triggered, or empty list if no trigger or still acquiring."""
+        """Process one time step with observed count and background estimate.
+
+        Args:
+            x: Observed count at current time step.
+            b: Background estimate at current time step.
+
+        Returns:
+            List of window sizes that triggered, or empty list if no trigger
+            or still in acquisition phase.
+        """
         self.acc_x += x
         self.acc_b += b
 
@@ -229,8 +329,19 @@ class TriggerDyadic:
 
 
 def search_qbdata(xs: Sequence[int], size: int, maxtest: int, threshold: float) -> List[Hit]:
-    """Launches transient search with moving average background estimate on one count time series.
-    Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
+    """Search a single count time series for transient events.
+
+    Uses moving average for background estimation and dyadic trigger for detection.
+
+    Args:
+        xs: Count time series for one quadrant/band combination.
+        size: Half-window size for moving average background estimate.
+        maxtest: Maximum trigger window size (must be power of 2).
+        threshold: Detection threshold in sigma units.
+
+    Returns:
+        List of hits as (time_index, window_length) tuples.
+    """
     bs, vrange = moving_average(xs, size)
     if vrange == _INVALID_INTERVAL:
         return []
@@ -238,15 +349,22 @@ def search_qbdata(xs: Sequence[int], size: int, maxtest: int, threshold: float) 
     return t(xs, bs, vrange=vrange)
 
 
-def search_data(
-        data: Data,
-        checks: Sequence[Index],
-        size: int,
-        maxtest: int,
-        threshold: float
-) -> List[Hit]:
-    """Search data for transient events over all band/quadrant combinations specified by `checks`.
-    Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
+def search_data(data: Data, checks: Sequence[Index], size: int, maxtest: int, threshold: float) -> List[Hit]:
+    """Search data for transient events across multiple band/quadrant combinations.
+
+    Only returns hits that trigger in all specified combinations simultaneously.
+
+    Args:
+        data: Nested tuple of count lists indexed by (band, quadrant).
+        checks: Sequence of (band, quadrant) combinations to search.
+        size: Half-window size for moving average background estimate.
+        maxtest: Maximum trigger window size (must be power of 2).
+        threshold: Detection threshold in sigma units.
+
+    Returns:
+        List of hits as (time_index, window_length) tuples that triggered
+        in all specified band/quadrant combinations.
+    """
     hits_counter = Counter()
     for band, quadrant in checks:
         hits = search_qbdata(data[band][quadrant], size, maxtest, threshold)
@@ -256,28 +374,56 @@ def search_data(
 
 
 def search_filepath(
-        filepath: Union[Path, str],
-        checks: Sequence[Index],
-        size: int,
-        maxtest: int,
-        threshold: float,
+    filepath: Union[Path, str],
+    checks: Sequence[Index],
+    size: int,
+    maxtest: int,
+    threshold: float,
 ) -> List[Hit]:
-    """Search SRA file for transient events over all band/quadrant combinations specified by `checks`.
-    Output is a list of 2-tuple trigger hits (trigger time-index, window length)"""
+    """Search an SRA file for transient events.
+
+    Parses the file and searches across specified band/quadrant combinations.
+
+    Args:
+        filepath: Path to the SRA file.
+        checks: Sequence of (band, quadrant) combinations to search.
+        size: Half-window size for moving average background estimate.
+        maxtest: Maximum trigger window size (must be power of 2).
+        threshold: Detection threshold in sigma units.
+
+    Returns:
+        List of hits as (time_index, window_length) tuples.
+    """
     data, abts = sra_parse(filepath)
     return search_data(data, checks, size, maxtest, threshold)
 
 
 def hit_tointerval(hit: Hit) -> Interval:
-    """Transforms a 2-tuple trigger hit (trigger time-index, window length) into a 2-tuple interval
-    (transient start index, trigger time index + 1)."""
+    """Convert a trigger hit to a time interval.
+
+    Args:
+        hit: A (time_index, window_length) tuple from the trigger algorithm.
+
+    Returns:
+        An (start, end) interval where start is the transient start index
+        and end is the trigger time index + 1.
+    """
     i, h = hit
     return i - h + 1, i + 1
 
 
 def summarize(hits: Sequence[Hit]) -> Tuple[int, Interval]:
-    """Summarize a list of trigger hits. Returns number of hits, and 2-tuple interval
-    (earliest transient start index, latest trigger time index + 1)."""
+    """Summarize a list of trigger hits into a count and bounding interval.
+
+    Args:
+        hits: Sequence of (time_index, window_length) tuples.
+
+    Returns:
+        A tuple containing:
+            - nhits: Number of hits.
+            - interval: The (earliest_start, latest_end) bounding interval,
+              or (-1, -1) if no hits.
+    """
     nhits = len(hits)
     if nhits > 0:
         starts, ends = zip(*[hit_tointerval(h) for h in hits])
@@ -286,33 +432,39 @@ def summarize(hits: Sequence[Hit]) -> Tuple[int, Interval]:
 
 
 def main():
-    """Search SRA file for transient events and write results to output file.
+    """Search an SRA file for transient events and write results to output file.
 
     Parses command-line arguments, runs the trigger algorithm on the specified
     SRA file, and writes a summary to <filename>_trigger.txt if events are found.
-    Exit codes: 0 on success, 1 on invalid input file, 2 on invalid parameters.
+
+    Returns:
+        ErrorCode.OK (0) on success, ErrorCode.INVALID_FILE (1) if the input
+        file is missing or malformed, ErrorCode.INVALID_PARAMETERS (2) if
+        command-line arguments are invalid.
     """
-    parser = argparse.ArgumentParser(
-        description="Search for transient events in SpIRIT/HERMES-FM1 SRA data."
+
+    parser = argparse.ArgumentParser(description="Search for transient events in SpIRIT/HERMES-FM1 SRA data.")
+    parser.add_argument(
+        "filepath",
+        help="Path to SRA file.",
     )
-    parser.add_argument("filepath", help="Path to SRA file.")
     parser.add_argument(
         "--size",
         type=int,
         default=_SEARCH_SIZE_DEFAULT,
-        help=f"moving average half-window size (default: {_SEARCH_SIZE_DEFAULT})."
+        help=f"moving average half-window size (default: {_SEARCH_SIZE_DEFAULT}).",
     )
     parser.add_argument(
         "--maxtest",
         type=int,
         default=_SEARCH_MAXTEST_DEFAULT,
-        help=f"maximum trigger window length, must be power of 2 (default: {_SEARCH_MAXTEST_DEFAULT})."
+        help=f"maximum trigger window length, must be power of 2 (default: {_SEARCH_MAXTEST_DEFAULT}).",
     )
     parser.add_argument(
         "--threshold",
         type=float,
         default=_SEARCH_THRESHOLD_DEFAULT,
-        help=f"detection threshold in standard deviation units (default: {_SEARCH_THRESHOLD_DEFAULT})."
+        help=f"detection threshold in standard deviation units (default: {_SEARCH_THRESHOLD_DEFAULT}).",
     )
     args = parser.parse_args()
 
@@ -329,13 +481,15 @@ def main():
     filepath = Path(args.filepath)
 
     try:
-        nhits, (start, end) = summarize(search_filepath(
-            filepath,
-            checks=_SEARCH_CHECKS_DEFAULT,
-            size=args.size,
-            maxtest=args.maxtest,
-            threshold=args.threshold
-        ))
+        nhits, (start, end) = summarize(
+            search_filepath(
+                filepath,
+                checks=_SEARCH_CHECKS_DEFAULT,
+                size=args.size,
+                maxtest=args.maxtest,
+                threshold=args.threshold,
+            )
+        )
     except FileNotFoundError:
         print("Input file does not exist. Goodbye.")
         return ErrorCode.INVALID_FILE
@@ -352,3 +506,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+    # ~p26

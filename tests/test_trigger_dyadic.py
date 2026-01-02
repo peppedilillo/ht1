@@ -1,8 +1,11 @@
 """
 Tests for TriggerDyadic class.
 """
+
 from math import sqrt
-from ht1.ht1 import TriggerDyadic, TriggerStatus
+
+from ht1.ht1 import TriggerDyadic
+from ht1.ht1 import TriggerStatus
 
 
 def test_initial_status_is_acquiring():
@@ -14,7 +17,7 @@ def test_initial_status_is_acquiring():
 def test_threshold_conversion():
     """Threshold sigma is converted to half-squared LLR."""
     t = TriggerDyadic(maxtest=4, threshold=5.0)
-    assert t.llr_threshold_halfsq == 0.5 * (5.0 ** 2)
+    assert t.llr_threshold_halfsq == 0.5 * (5.0**2)
 
 
 def test_transition_to_running():
@@ -85,7 +88,7 @@ def test_threshold():
 
     # Background: 10 counts per bin
     # Spike: 200 counts at index 10
-    b = 1e+6
+    b = 1e6
     xs = [b] * 20
     xs[10] = b + sqrt(b) * 5.01
     bs = [b] * 20
@@ -95,7 +98,8 @@ def test_threshold():
 
     # check we got the trigger
     assert len(hits) > 0
-    assert 10 in [i for i,h in hits]
+    assert 10 in [i for i, h in hits]
+
 
 def test_obvious_transient_multi_bin():
     """A sustained transient over multiple bins should trigger with larger windows."""
@@ -113,10 +117,7 @@ def test_obvious_transient_multi_bin():
 
     assert len(hits) > 0
     # Check that some hits cover the transient region
-    transient_hits = [
-        (t_idx, w_len) for t_idx, w_len in hits
-        if t_idx - w_len + 1 <= 15 and t_idx >= 12
-    ]
+    transient_hits = [(t_idx, w_len) for t_idx, w_len in hits if t_idx - w_len + 1 <= 15 and t_idx >= 12]
     assert len(transient_hits) > 0
 
 
@@ -154,8 +155,7 @@ def test_no_false_positives_on_fluctuations():
     t = TriggerDyadic(maxtest=8, threshold=5.0)
 
     # Background 50, small fluctuations +/- 10
-    xs = [50, 55, 45, 52, 48, 53, 47, 51, 49, 54, 46, 52, 48, 55, 45, 50,
-          51, 49, 53, 47, 52, 48, 54, 46]
+    xs = [50, 55, 45, 52, 48, 53, 47, 51, 49, 54, 46, 52, 48, 55, 45, 50, 51, 49, 53, 47, 52, 48, 54, 46]
     bs = [50.0] * 24
     vrange = (0, 24)
 

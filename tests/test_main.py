@@ -2,15 +2,14 @@
 Tests for main function via subprocess.
 """
 
-import subprocess
-import shutil
-import sys
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 
 import pytest
 
 from ht1.ht1 import ErrorCode
-
 
 TEST_DATA_DIR = Path(__file__).parent / "data"
 TEST_FILES = list(TEST_DATA_DIR.glob("**/SRA/*.raw"))
@@ -28,6 +27,7 @@ def run_main(*args):
 
 
 # --- Valid file tests ---
+
 
 @pytest.mark.parametrize("filepath", TEST_FILES, ids=lambda p: p.parent.parent.name)
 def test_main_completes_on_valid_files(filepath, tmp_path):
@@ -92,6 +92,7 @@ def test_main_no_output_when_no_hits(tmp_path):
 
 # --- Invalid file tests ---
 
+
 def test_main_file_not_found(tmp_path):
     """Non-existent file returns INVALID_FILE error code."""
     result = run_main(str(tmp_path / "nonexistent.raw"))
@@ -112,6 +113,7 @@ def test_main_invalid_sra(tmp_path):
 
 
 # --- Invalid parameter tests ---
+
 
 def test_main_invalid_size_zero(tmp_path):
     """--size 0 returns INVALID_PARAMETERS error code."""
@@ -196,6 +198,7 @@ def test_main_invalid_threshold_negative(tmp_path):
 
 # --- Custom parameter tests ---
 
+
 def test_main_custom_parameters(tmp_path):
     """Main accepts custom size, maxtest, and threshold."""
     if not TEST_FILES:
@@ -204,12 +207,7 @@ def test_main_custom_parameters(tmp_path):
     tmp_file = tmp_path / TEST_FILES[0].name
     shutil.copy(TEST_FILES[0], tmp_file)
 
-    result = run_main(
-        str(tmp_file),
-        "--size", "100",
-        "--maxtest", "16",
-        "--threshold", "4.0"
-    )
+    result = run_main(str(tmp_file), "--size", "100", "--maxtest", "16", "--threshold", "4.0")
 
     assert result.returncode == ErrorCode.OK
 

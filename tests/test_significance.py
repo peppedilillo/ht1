@@ -2,7 +2,9 @@
 Tests for significance function.
 """
 
-from math import log, sqrt
+from math import log
+from math import sqrt
+
 from ht1.ht1 import significance
 
 
@@ -47,9 +49,11 @@ def test_formula_correctness():
     expected = x * log(x / b) - (x - b)
     assert significance(x, b) == expected
 
+
 def test_formula_approximation():
-    b = 1e+6
-    assert significance(b + sqrt(b) * 5.01, b) > .5 * 5. ** 2
+    b = 1e6
+    assert significance(b + sqrt(b) * 5.01, b) > 0.5 * 5.0**2
+
 
 def test_fractional_values():
     """Test with non-integer values. Note this is allowed."""

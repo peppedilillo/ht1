@@ -1,5 +1,7 @@
-from setuptools import setup, find_packages
 import pathlib
+
+from setuptools import find_packages
+from setuptools import setup
 
 here = pathlib.Path(__file__).parent.resolve()
 setup(
@@ -15,6 +17,9 @@ setup(
     packages=find_packages(where="src"),
     python_requires=">=3.6",
     extras_require={  # Optional
-        "dev": ["pytest", "pyinstrument",],
+        "dev": [
+            "pytest",
+            "pyinstrument",
+        ],
     },
 )

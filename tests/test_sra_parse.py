@@ -6,7 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from ht1.ht1 import sra_parse, _NQUADRANTS, _NBANDS, InvalidSRA
+from ht1.ht1 import _NBANDS
+from ht1.ht1 import _NQUADRANTS
+from ht1.ht1 import InvalidSRA
+from ht1.ht1 import sra_parse
 
 
 def test_sra_parse_all_files():
@@ -29,8 +32,10 @@ def test_sra_parse_all_files():
             for quad in range(_NQUADRANTS):
                 assert len(data[band][quad]) > 0, f"Data is empty for band {band}, quadrant {quad} in {sra_file}"
 
-        print(f"{sra_file.parent.parent.name}/{sra_file.parent.name}/{sra_file.name}: "
-              f"{len(abts)} ABTs, {len(data[0][0])} data points per band/quad")
+        print(
+            f"{sra_file.parent.parent.name}/{sra_file.parent.name}/{sra_file.name}: "
+            f"{len(abts)} ABTs, {len(data[0][0])} data points per band/quad"
+        )
 
     print(f"PASS: All {len(sra_files)} files parsed successfully with valid data")
 
