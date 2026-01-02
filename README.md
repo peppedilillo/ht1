@@ -1,6 +1,7 @@
 # ht1
 
-This codebase implements a transient detection algorithm for deployment on Loris NVIDIA Jetson Nano computer on-board SpIRIT nanosatellite, in pure Python >= 3.6. 
+This codebase implements a transient detection algorithm for data acquired by the HERMES-FM1 payload onboard the SpIRIT nanosatellite.
+Targets Python 3.6+ for deployment on the Loris NVIDIA Jetson Nano computer.
 
 ## Usage
 
