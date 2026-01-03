@@ -5,9 +5,12 @@ Targets Python 3.6+ and was developed for deployment on the SpIRIT-Loris NVIDIA 
 
 ## Usage
 
+Assuming `python3` points to a Python 3.6+ binary:
+
 1. Copy the script `ht1.py` from the `src/ht1` directory.
 2. Run on HERMES SRA binary files with `python3 ht1.py SRAFILENAME`.
 
+The `ht1.py` script has no dependencies outside standard library and requires no installation.
 If the transient search returns a positive, a new file `SRAFILENAME_trigger.txt` is created in the `SRAFILENAME` parent directory. 
 The trigger output files are purposefully minimal UTF-8 encoded text files. 
 They contain only three integers: the number of trigger hits, a start-time index, and an end-time index. The transients live somewhere between the start and end time indeces.
