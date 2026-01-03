@@ -1,4 +1,4 @@
-# ht1
+# HT1
 
 This codebase implements a transient detection algorithm for data acquired by the HERMES-FM1 payload onboard the SpIRIT nanosatellite.
 Targets Python 3.6+ for deployment on the Loris NVIDIA Jetson Nano computer.
@@ -16,7 +16,7 @@ The script returns error code 0 upon successful execution, error code 1 over wro
 
 Search parameters can be controlled using a number of flags, see `python3 ht1.py --help` for more information.
 
-### Working with ht1 on ground
+### Working with HT1 on ground
 
 This codebase can also be installed as package for reproducibility and on-ground applications, see [documentation](docs/scripting_ht1.md) for more info.
 

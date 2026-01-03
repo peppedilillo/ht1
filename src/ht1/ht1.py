@@ -104,7 +104,7 @@ def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
         FileNotFoundError: If the file does not exist.
     """
     sra_specs = SRASpecs()
-    block_fmt = sra_specs.ABT_FMT + sra_specs.DATA_FMT * ((_NQUADRANTS + 1) * _NBANDS)
+    block_fmt = sra_specs.ABT_FMT + sra_specs.DATA_FMT * _NBANDS * (_NQUADRANTS + 1)
     block_struct = struct.Struct(block_fmt)
 
     fsize = Path(filepath).stat().st_size
@@ -112,20 +112,20 @@ def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
         if fsize < sra_specs.HEADER_SIZE:
             raise InvalidSRA("File size smaller than header size.")
         header = f.read(sra_specs.HEADER_SIZE)
-        (hfsize,) = struct.unpack(sra_specs.FILELEN_FMT, header[slice(*sra_specs.FILELEN)])
+        hfsize, *_ = struct.unpack(sra_specs.FILELEN_FMT, header[slice(*sra_specs.FILELEN)])
         nblocks = (hfsize - sra_specs.HEADER_SIZE) // sra_specs.BLOCK_SIZE
         if nblocks * sra_specs.BLOCK_SIZE > fsize - sra_specs.HEADER_SIZE:
             raise InvalidSRA("Invalid header fsize.")
         abts = [0] * nblocks
         data = tuple(tuple([0] * (nblocks * sra_specs.DATA_SIZE) for _ in range(_NQUADRANTS)) for _ in range(_NBANDS))
-        for block in range(nblocks):
+        for ib in range(nblocks):
             values = block_struct.unpack(f.read(sra_specs.BLOCK_SIZE))
-            abts[block] = values[0]
+            abts[ib] = values[0]
             offset = 1  # skip ABT
             for band in range(_NBANDS):
                 offset += sra_specs.DATA_SIZE  # skip quadrant A
                 for quad in range(_NQUADRANTS):
-                    start = block * sra_specs.DATA_SIZE
+                    start = ib * sra_specs.DATA_SIZE
                     end = start + sra_specs.DATA_SIZE
                     data[band][quad][start:end] = values[offset : offset + sra_specs.DATA_SIZE]
                     offset += sra_specs.DATA_SIZE
