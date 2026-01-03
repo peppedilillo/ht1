@@ -11,7 +11,7 @@ Assuming `python3` points to Python 3.6+:
 2. Run with `python3 ht1.py path/to/SRAFILE`.
 
 The `ht1.py` script has no dependencies outside standard library and requires no installation.
-If the transient search returns a positive, a new file `SRAFILENAME_trigger.txt` is created in the `SRAFILENAME` parent directory. 
+If the transient search returns a positive, a new file `SRAFILE_trigger.txt` is created in the `SRAFILE` parent directory. 
 The trigger output files are purposefully minimal UTF-8 encoded text files. 
 They contain only three integers: the number of trigger hits, a start-time index, and an end-time index. The transients live somewhere between the start and end time indeces.
 If no transient is found, no file is created.
