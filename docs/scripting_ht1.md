@@ -1,6 +1,6 @@
 # Scripting with HT1
 
-You can install HT1 as a standard Python >=3.6 package for on-ground reproducibility. 
+You can install HT1 as a standard Python 3.6+ package for on-ground reproducibility. 
 The process is straightforward: git clone this repository, move to your local clone directory and install with `pip install .`.
 
 Once installed, you can run a transient search over a SRA file with custom parameters using `search_filepath`:
