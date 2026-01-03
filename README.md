@@ -5,10 +5,10 @@ Targets Python 3.6+ and was developed for deployment on the SpIRIT-Loris NVIDIA 
 
 ## Usage
 
-Assuming `python3` points to a Python 3.6+ binary:
+Assuming `python3` points to Python 3.6+:
 
 1. Copy the script `ht1.py` from the `src/ht1` directory.
-2. Run on HERMES SRA binary files with `python3 ht1.py SRAFILENAME`.
+2. Run with `python3 ht1.py path/to/SRAFILE`.
 
 The `ht1.py` script has no dependencies outside standard library and requires no installation.
 If the transient search returns a positive, a new file `SRAFILENAME_trigger.txt` is created in the `SRAFILENAME` parent directory. 
