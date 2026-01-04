@@ -1,8 +1,11 @@
-"""
-A program and module for searching transients in SpIRIT/HERMES-FM1 SRA data.
+"""A program and module for searching transients in SpIRIT/HERMES-FM1 SRA data.
 
-Author: Giuseppe Dilillo
-Date: January 2026
+This module provides tools to parse SRA files, compute moving averages for
+background estimation, and apply a dyadic windowed trigger algorithm to detect
+Poisson count excesses (transients).
+
+Example:
+    $ python ht1.py srafile --threshold 5.0 --maxtest 16
 """
 
 import argparse
@@ -85,10 +88,11 @@ class InvalidSRA(Exception):
 
 
 def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
-    """Parse an SRA file and extract count data and ABT timestamps.
+    """Parses an SRA file and extracts count data and ABT timestamps.
 
-    Data are organized as nested tuples: the outer level indexes energy band, the inner level indexes quadrant.
-    For example, `data[2][0]` selects quadrant B (index 0) in the high-energy band (index 2).
+    Data are organized as nested tuples: the outer level indexes energy band,
+    the inner level indexes quadrant. For example, `data[2][0]` selects
+    quadrant B (index 0) in the high-energy band (index 2).
 
     Args:
         filepath: Path to the SRA file.
@@ -134,17 +138,19 @@ def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
 
 
 def ma_range(xs: Sequence[int], size: int) -> Interval:
-    """Compute a valid range for simple moving average with centered window of length `2*size + 1`.
+    """Computes a valid range for a simple moving average.
 
-    Finds the first and last non-zero elements in the sequence.
-    Then, returns an  interval padded inward by the window half-size.
+    The range is based on a centered window of length `2*size + 1`. It finds the
+    first and last non-zero elements and returns an interval padded inward by
+    the window half-size.
 
     Args:
         xs: Input sequence of integer counts.
         size: Half-window size for the moving average.
 
     Returns:
-        A tuple (start, end), or (-1, -1) if sequence is empty, all zeros, or too short.
+        A tuple (start, end), or (-1, -1) if sequence is empty, all zeros,
+        or too short for the window size.
     """
     n = len(xs)
     if n == 0:
@@ -167,7 +173,9 @@ def ma_range(xs: Sequence[int], size: int) -> Interval:
 
 
 def moving_average(xs: Sequence[int], size: int) -> Tuple[List[float], Interval]:
-    """Simple moving average with centered window of length `2*size + 1`, ignoring leading and trailing zeros.
+    """Computes a simple moving average with a centered window.
+
+    Leading and trailing zeroes are ignored.
 
     Args:
         xs: Input sequence of integer counts.
@@ -217,17 +225,20 @@ def significance(x: float, b: float) -> float:
 
 
 class TriggerDyadic:
-    """Dyadic windowed trigger algorithm for detecting excesses in Poisson count time series.
-
-    Searches for intervals where significance exceeds a threshold using power-of-2 window sizes.
+    """Dyadic windowed trigger algorithm for detecting Poisson count excesses.
 
     Attributes:
         maxtest: Maximum window size to test (must be power of 2).
         llr_threshold_halfsq: Detection threshold as half-squared LLR.
+        phase_counter: Counter to track window alignment.
+        acc_x: Accumulated sum of observed counts.
+        acc_b: Accumulated sum of background counts.
+        queue_x: Deque storing count history.
+        queue_b: Deque storing background history.
     """
 
     def __init__(self, maxtest: int, threshold: float):
-        """Initialize the trigger algorithm.
+        """Initializes the trigger algorithm.
 
         Args:
             maxtest: Maximum window size to test (must be power of 2).
@@ -244,7 +255,7 @@ class TriggerDyadic:
         self.queue_b = deque([0.0], maxlen=maxtest + 1)
 
     def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Interval) -> List[Hit]:
-        """Run the trigger algorithm on count data with background estimates.
+        """Runs the trigger algorithm on count data with background estimates.
 
         Args:
             xs: Observed count sequence.
@@ -260,19 +271,19 @@ class TriggerDyadic:
         return hits
 
     def status(self) -> TriggerStatus:
-        """Return the current trigger status.
+        """Returns the current trigger status.
 
         Returns:
-            ACQUIRING if still collecting initial data, RUNNING otherwise.
+            TriggerStatus.RUNNING if enough data has been collected, else
+            TriggerStatus.ACQUIRING.
         """
         return TriggerStatus.RUNNING if self.phase_counter >= 0 else TriggerStatus.ACQUIRING
 
     def maximize(self) -> List[int]:
-        """Check dyadic window sizes ending at current time for statistically
-        significant excess.
+        """Checks dyadic window sizes for significant excesses.
 
-        Tests windows of size 1, 2, 4, 8, ... up to maxtest.
-        A window of length h is tested once every h calls.
+        Tests windows of size 1, 2, 4, 8, ... up to maxtest ending at the
+        current time step.
 
         Returns:
             List of window sizes that exceed the significance threshold.
@@ -291,15 +302,15 @@ class TriggerDyadic:
         return hs
 
     def step(self, x: float, b: float) -> List[int]:
-        """Process one time step with observed count and background estimate.
+        """Processes one time step with observed count and background estimate.
 
         Args:
             x: Observed count at current time step.
             b: Background estimate at current time step.
 
         Returns:
-            List of window sizes that triggered, if any.
-            An empty list is returned during acquisition phase.
+            List of window sizes that triggered. Returns an empty list during
+            the initial acquisition phase.
         """
         self.acc_x += x
         self.acc_b += b
@@ -323,8 +334,7 @@ class TriggerDyadic:
 
 
 def search_qbdata(xs: Sequence[int], size: int, maxtest: int, threshold: float) -> List[Hit]:
-    """Search a single count time series for transient events.
-    Uses moving average for background estimation and dyadic trigger for detection.
+    """Searches a single count time series for transient events.
 
     Args:
         xs: Count time series for one quadrant/band combination.
@@ -343,7 +353,8 @@ def search_qbdata(xs: Sequence[int], size: int, maxtest: int, threshold: float) 
 
 
 def search_data(data: Data, checks: Sequence[Index], size: int, maxtest: int, threshold: float) -> List[Hit]:
-    """Search data for transient events across multiple band/quadrant combinations.
+    """Searches data for transients across multiple band/quadrant combinations.
+
     Only returns hits that trigger in all specified combinations simultaneously.
 
     Args:
@@ -354,8 +365,7 @@ def search_data(data: Data, checks: Sequence[Index], size: int, maxtest: int, th
         threshold: Detection threshold in sigma units.
 
     Returns:
-        List of hits as (time_index, window_length) tuples that triggered
-        in all specified band/quadrant combinations.
+        List of hits that triggered in all specified combinations.
     """
     hits_counter = Counter()
     for band, quadrant in checks:
@@ -372,9 +382,7 @@ def search_filepath(
     maxtest: int,
     threshold: float,
 ) -> List[Hit]:
-    """Search an SRA file for transient events.
-    Parses the file and searches across specified band/quadrant combinations.
-    Only returns hits that trigger in all specified combinations simultaneously.
+    """Searches an SRA file for transient events.
 
     Args:
         filepath: Path to the SRA file.
@@ -391,30 +399,29 @@ def search_filepath(
 
 
 def hit_tointerval(hit: Hit) -> Interval:
-    """Convert a trigger hit to a time interval.
+    """Converts a trigger hit to a time interval.
 
     Args:
-        hit: A (time_index, window_length) tuple from the trigger algorithm.
+        hit: A (time_index, window_length) tuple.
 
     Returns:
-        An (start, end) interval where:
-            - `start` is the window start time index
-            - `end` is the trigger time index + 1.
+        An (start, end) interval where `start` is the window start index
+        and `end` is the trigger index + 1.
     """
     i, h = hit
     return i - h + 1, i + 1
 
 
 def summarize(hits: Sequence[Hit]) -> Tuple[int, Interval]:
-    """Summarize a list of trigger hits into a count and bounding interval.
+    """Summarizes a list of trigger hits into a count and bounding interval.
 
     Args:
         hits: Sequence of (time_index, window_length) tuples.
 
     Returns:
         A tuple containing:
-            - nhits: Number of hits.
-            - interval: The (earliest_start, latest_end) bounding interval, or (-1, -1) if no hits.
+            - nhits: Total number of hits.
+            - interval: The (earliest_start, latest_end) bounding interval.
     """
     nhits = len(hits)
     if nhits > 0:
@@ -424,17 +431,16 @@ def summarize(hits: Sequence[Hit]) -> Tuple[int, Interval]:
 
 
 def main() -> ErrorCode:
-    """Search an SRA file for transient events and write results to output file.
+    """Searches an SRA file for transient events and write results to output file.
 
     Parses command-line arguments and runs the trigger algorithm on the specified SRA file.
     Writes a summary to <filename>_trigger.txt if any transient is found.
 
     Returns:
-        - ErrorCode.OK (0) on success
-        - ErrorCode.INVALID_FILE (1) if the input file is missing or malformed
-        - ErrorCode.INVALID_PARAMETERS (2) if command-line arguments are invalid.
+        - OK (0) on success
+        - INVALID_FILE (1) if the input file is missing or malformed
+        - INVALID_PARAMETERS (2) if command-line arguments are invalid.
     """
-
     parser = argparse.ArgumentParser(description="Search for transient events in SpIRIT/HERMES-FM1 SRA data.")
     parser.add_argument(
         "filepath",
