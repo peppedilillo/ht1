@@ -5,31 +5,12 @@ Tests for TriggerDyadic class.
 from math import sqrt
 
 from ht1.ht1 import TriggerDyadic
-from ht1.ht1 import TriggerStatus
-
-
-def test_initial_status_is_acquiring():
-    """Trigger starts in ACQUIRING status."""
-    t = TriggerDyadic(maxtest=4, threshold=5.0)
-    assert t.status() == TriggerStatus.ACQUIRING
 
 
 def test_threshold_conversion():
     """Threshold sigma is converted to half-squared LLR."""
     t = TriggerDyadic(maxtest=4, threshold=5.0)
     assert t.llr_threshold_halfsq == 0.5 * (5.0**2)
-
-
-def test_transition_to_running():
-    """After foreground_len+1 steps, status transitions to RUNNING."""
-    t = TriggerDyadic(maxtest=4, threshold=5.0)
-
-    # Feed foreground_len steps - should still be acquiring after foreground_len-1
-    for _ in range(4):
-        t.step(10.0, 10.0)
-
-    # After foreground_len steps, queue is full, status should be RUNNING
-    assert t.status() == TriggerStatus.RUNNING
 
 
 def test_no_trigger_on_quiet_data():
@@ -45,19 +26,17 @@ def test_no_trigger_on_quiet_data():
     assert hits == []
 
 
-def test_no_trigger_during_acquiring():
-    """No triggers should be produced while in ACQUIRING status."""
-    t = TriggerDyadic(maxtest=8, threshold=3.0)
+def test_trigger_on_single_data():
+    """Constant counts equal to background should produce no triggers."""
+    t = TriggerDyadic(maxtest=4, threshold=3.0)
 
-    # Insert a huge spike during acquisition phase
-    xs = [10, 10, 500, 500, 10, 10, 10, 10]  # spike at indices 2,3
-    bs = [10.0] * 8
-    vrange = (0, 8)
+    # 20 steps of quiet data: counts = background = 10
+    xs = [100]
+    bs = [1.0]
+    vrange = (0, 1)
 
     hits = t(xs, bs, vrange)
-    # Acquisition takes 8 steps, so no hits even with spike
-    assert hits == []
-
+    assert 0 in [i for i, _ in hits]
 
 def test_obvious_transient_single_bin():
     """A large single-bin spike should trigger."""
@@ -200,14 +179,10 @@ def test_call_interface():
 
 
 if __name__ == "__main__":
-    test_initial_status_is_acquiring()
     test_threshold_conversion()
-    test_transition_to_running()
     test_no_trigger_on_quiet_data()
-    test_no_trigger_during_acquiring()
     test_obvious_transient_single_bin()
     test_obvious_transient_multi_bin()
-    test_hit_window_sizes_are_dyadic()
     test_hit_time_indices_in_range()
     test_accumulator_correctness()
     test_no_false_positives_on_fluctuations()

@@ -11,7 +11,6 @@ Example:
 import argparse
 from collections import Counter
 from collections import deque
-from enum import Enum
 from enum import IntEnum
 from itertools import accumulate
 import logging
@@ -206,13 +205,6 @@ def moving_average(xs: Sequence[int], size: int) -> Tuple[List[float], Interval]
     return sma, vrange
 
 
-class TriggerStatus(Enum):
-    """Status of the algorithm: ACQUIRING initial data or RUNNING detection."""
-
-    ACQUIRING = 0
-    RUNNING = 1
-
-
 def significance(x: float, b: float) -> float:
     """Compute the half-squared Poisson log-likelihood ratio.
 
@@ -235,6 +227,7 @@ class TriggerDyadic:
         maxtest: Maximum window size to test (must be power of 2).
         llr_threshold_halfsq: Detection threshold as half-squared LLR.
         phase_counter: Counter to track window alignment.
+        frequency: Controls how many times a window is checked in a phase cycle.
         acc_x: Accumulated sum of observed counts.
         acc_b: Accumulated sum of background counts.
         queue_x: Deque storing count history.
@@ -252,7 +245,8 @@ class TriggerDyadic:
         # convert to half, squared llr threshold for performances
         self.llr_threshold_halfsq = 0.5 * (threshold**2)
 
-        self.phase_counter = -1
+        self.phase_counter = 0
+        self.frequency = 1
         self.acc_x = 0
         self.acc_b = 0.
         self.queue_x = deque([0], maxlen=maxtest + 1)
@@ -274,15 +268,6 @@ class TriggerDyadic:
             hits.extend([(j, h) for h in self.step(xs[j], bs[i])])
         return hits
 
-    def status(self) -> TriggerStatus:
-        """Returns the current trigger status.
-
-        Returns:
-            TriggerStatus.RUNNING if enough data has been collected, else
-            TriggerStatus.ACQUIRING.
-        """
-        return TriggerStatus.RUNNING if self.phase_counter >= 0 else TriggerStatus.ACQUIRING
-
     def maximize(self) -> List[int]:
         """Checks dyadic window sizes for significant excesses.
 
@@ -295,8 +280,9 @@ class TriggerDyadic:
         hs = []
         h = 1
         while h <= self.maxtest:
-            # checking `2 * self.phase_counter % h` tests window length h,  *2* times over h calls.
-            if self.phase_counter % h:
+            # checking `1 * self.phase_counter % h` tests window length h, 1 time over h calls.
+            # checking `2 * self.phase_counter % h` tests window length h, 2 times over h calls.
+            if self.frequency * self.phase_counter % h:
                 break
             win_x = self.acc_x - self.queue_x[-h]
             win_b = self.acc_b - self.queue_b[-h]
@@ -313,28 +299,18 @@ class TriggerDyadic:
             b: Background estimate at current time step.
 
         Returns:
-            List of window sizes that triggered. Returns an empty list during
-            the initial acquisition phase.
+            List of window sizes that triggered.
         """
         self.acc_x += x
         self.acc_b += b
-
-        if self.status() == TriggerStatus.RUNNING:
-            hs = self.maximize()
-
-            self.queue_x.popleft()
-            self.queue_b.popleft()
-            self.queue_x.append(self.acc_x)
-            self.queue_b.append(self.acc_b)
-            self.phase_counter = (self.phase_counter + 1) % self.maxtest
-            return hs
-
-        else:
-            self.queue_x.append(self.acc_x)
-            self.queue_b.append(self.acc_b)
-            if len(self.queue_x) == self.queue_x.maxlen:
-                self.phase_counter = 0
-            return []
+        self.phase_counter = (self.phase_counter + 1) % self.maxtest
+        if self.frequency == 1 and len(self.queue_x) == self.maxtest:
+            # once we get enough data we can check longer window more often
+            self.frequency *= 2
+        hs = self.maximize()
+        self.queue_x.append(self.acc_x)
+        self.queue_b.append(self.acc_b)
+        return hs
 
 
 def search_qbdata(xs: Sequence[int], size: int, maxtest: int, threshold: float) -> List[Hit]:
@@ -353,10 +329,7 @@ def search_qbdata(xs: Sequence[int], size: int, maxtest: int, threshold: float) 
     if (vmin, vmax) == _INVALID_INTERVAL:
         _logger.warning("Invalid MA range: data too short or all zeros")
         return []
-    elif vmax - vmin - maxtest < 1:
-        _logger.warning("Not enough data to set the algorithm running")
-        return []
-    _logger.info(f"Algorithm ran {vmax - vmin - maxtest} iterations")
+    _logger.info(f"Algorithm ran {vmax - vmin} iterations")
     t = TriggerDyadic(maxtest=maxtest, threshold=threshold)
     return t(xs, bs, vrange=(vmin, vmax))
 

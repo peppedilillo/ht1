@@ -22,13 +22,11 @@ from ht1.ht1 import sra_parse
 from ht1.ht1 import SRASpecs
 from ht1.ht1 import summarize
 from ht1.ht1 import TriggerDyadic
-from ht1.ht1 import TriggerStatus
 
 __all__ = [
     "Quadrant",
     "EnBand",
     "ErrorCode",
-    "TriggerStatus",
     "BandData",
     "Data",
     "Hit",
