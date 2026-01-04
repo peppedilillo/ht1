@@ -98,7 +98,7 @@ def test_main_file_not_found(tmp_path):
     result = run_main(str(tmp_path / "nonexistent.raw"))
 
     assert result.returncode == ErrorCode.INVALID_FILE
-    assert "does not exist" in result.stdout
+    assert "does not exist" in result.stderr
 
 
 def test_main_invalid_sra(tmp_path):
@@ -109,7 +109,7 @@ def test_main_invalid_sra(tmp_path):
     result = run_main(str(bad_file))
 
     assert result.returncode == ErrorCode.INVALID_FILE
-    assert "not valid" in result.stdout
+    assert "not valid" in result.stderr
 
 
 # --- Invalid parameter tests ---
@@ -126,7 +126,7 @@ def test_main_invalid_size_zero(tmp_path):
     result = run_main(str(tmp_file), "--size", "0")
 
     assert result.returncode == ErrorCode.INVALID_PARAMETERS
-    assert "--size" in result.stdout
+    assert "--size" in result.stderr
 
 
 def test_main_invalid_size_negative(tmp_path):
@@ -153,7 +153,7 @@ def test_main_invalid_maxtest_not_power_of_2(tmp_path):
     result = run_main(str(tmp_file), "--maxtest", "3")
 
     assert result.returncode == ErrorCode.INVALID_PARAMETERS
-    assert "--maxtest" in result.stdout
+    assert "--maxtest" in result.stderr
 
 
 def test_main_invalid_maxtest_zero(tmp_path):
@@ -180,7 +180,7 @@ def test_main_invalid_threshold_zero(tmp_path):
     result = run_main(str(tmp_file), "--threshold", "0")
 
     assert result.returncode == ErrorCode.INVALID_PARAMETERS
-    assert "--threshold" in result.stdout
+    assert "--threshold" in result.stderr
 
 
 def test_main_invalid_threshold_negative(tmp_path):

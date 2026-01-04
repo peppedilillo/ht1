@@ -14,11 +14,15 @@ from collections import deque
 from enum import Enum
 from enum import IntEnum
 from itertools import accumulate
+import logging
 from math import log
 from pathlib import Path
 import struct
 import sys
 from typing import List, NamedTuple, Sequence, Tuple, Union
+
+_logger = logging.getLogger(__name__)
+_logger.addHandler(logging.NullHandler())
 
 
 class Quadrant(IntEnum):
@@ -249,10 +253,10 @@ class TriggerDyadic:
         self.llr_threshold_halfsq = 0.5 * (threshold**2)
 
         self.phase_counter = -1
-        self.acc_x = 0.0
-        self.acc_b = 0.0
-        self.queue_x = deque([0.0], maxlen=maxtest + 1)
-        self.queue_b = deque([0.0], maxlen=maxtest + 1)
+        self.acc_x = 0
+        self.acc_b = 0.
+        self.queue_x = deque([0], maxlen=maxtest + 1)
+        self.queue_b = deque([0.], maxlen=maxtest + 1)
 
     def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Interval) -> List[Hit]:
         """Runs the trigger algorithm on count data with background estimates.
@@ -301,7 +305,7 @@ class TriggerDyadic:
             h *= 2
         return hs
 
-    def step(self, x: float, b: float) -> List[int]:
+    def step(self, x: int, b: float) -> List[int]:
         """Processes one time step with observed count and background estimate.
 
         Args:
@@ -345,11 +349,16 @@ def search_qbdata(xs: Sequence[int], size: int, maxtest: int, threshold: float) 
     Returns:
         List of hits as (time_index, window_length) tuples.
     """
-    bs, vrange = moving_average(xs, size)
-    if vrange == _INVALID_INTERVAL:
+    bs, (vmin, vmax) = moving_average(xs, size)
+    if (vmin, vmax) == _INVALID_INTERVAL:
+        _logger.warning("Invalid MA range: data too short or all zeros")
         return []
+    elif vmax - vmin - maxtest < 1:
+        _logger.warning("Not enough data to set the algorithm running")
+        return []
+    _logger.info(f"Algorithm ran {vmax - vmin - maxtest} iterations")
     t = TriggerDyadic(maxtest=maxtest, threshold=threshold)
-    return t(xs, bs, vrange=vrange)
+    return t(xs, bs, vrange=(vmin, vmax))
 
 
 def search_data(data: Data, checks: Sequence[Index], size: int, maxtest: int, threshold: float) -> List[Hit]:
@@ -369,6 +378,7 @@ def search_data(data: Data, checks: Sequence[Index], size: int, maxtest: int, th
     """
     hits_counter = Counter()
     for band, quadrant in checks:
+        _logger.info(f"Running on quadrant {quadrant.name}, band {band.name}")
         hits = search_qbdata(data[band][quadrant], size, maxtest, threshold)
         for ih in hits:
             hits_counter[ih] += 1
@@ -464,19 +474,40 @@ def main() -> ErrorCode:
         default=_SEARCH_THRESHOLD_DEFAULT,
         help=f"detection threshold in standard deviation units (default: {_SEARCH_THRESHOLD_DEFAULT}).",
     )
+    # not passing --log flag sets logging level to error
+    # passing --log flag sets logging level to info
+    # passing --log=LEVEL sets logging level to LEVEL
+    parser.add_argument(
+        "--log",
+        nargs="?",
+        const="info",
+        choices=["info", "warning", "error"],
+        default="error",
+        help="Set logging level (default: error, --log without value: info).",
+    )
     args = parser.parse_args()
 
+    level_map = {"info": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR}
+    level = level_map[args.log]
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("[%(levelname)s] %(message)s"))
+    _logger.addHandler(handler)
+    _logger.setLevel(level)
+
     if args.size < 1:
-        print("Error: --size must be a positive integer.")
+        _logger.error("--size must be a positive integer.")
         return ErrorCode.INVALID_PARAMETERS
     if args.maxtest < 1 or (args.maxtest & (args.maxtest - 1)) != 0:
-        print("Error: --maxtest must be a positive power of 2.")
+        _logger.error("--maxtest must be a positive power of 2.")
         return ErrorCode.INVALID_PARAMETERS
     if args.threshold <= 0:
-        print("Error: --threshold must be a positive number.")
+        _logger.error("--threshold must be a positive number.")
         return ErrorCode.INVALID_PARAMETERS
 
     filepath = Path(args.filepath)
+
+    _logger.info(f"Input: {filepath}")
+    _logger.info(f"Parameters: size={args.size}, maxtest={args.maxtest}, threshold={args.threshold}")
 
     try:
         nhits, (start, end) = summarize(
@@ -489,16 +520,20 @@ def main() -> ErrorCode:
             )
         )
     except FileNotFoundError:
-        print("Input file does not exist. Goodbye.")
+        _logger.error("Input file does not exist")
         return ErrorCode.INVALID_FILE
     except InvalidSRA as e:
-        print(f"Input SRA file is not valid: {e}")
+        _logger.error(f"Input SRA file is not valid: {e}")
         return ErrorCode.INVALID_FILE
 
     if nhits > 0:
+        _logger.info(f"Found {nhits} trigger hits between time-index {start} and {end}")
         out_filepath = filepath.parent / f"{filepath.stem}_trigger.txt"
+        _logger.info(f"Writing to {out_filepath}")
         with open(out_filepath, "w") as f:
             f.write(f"{nhits} {start} {end}")
+    else:
+        _logger.info("No trigger hits")
     return ErrorCode.OK
 
 
