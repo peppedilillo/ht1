@@ -140,7 +140,7 @@ def sra_parse(filepath: Union[Path, str]) -> Tuple[Data, List[int]]:
     return data, abts
 
 
-def ma_range(xs: Sequence[int], size: int) -> Interval:
+def moving_average_range(xs: Sequence[int], size: int) -> Interval:
     """Computes a valid range for a simple moving average.
 
     The range is based on a centered window of length `2*size + 1`. It finds the
@@ -195,7 +195,7 @@ def moving_average(xs: Sequence[int], size: int) -> Tuple[List[float], Interval]
     if size < 1:
         raise ValueError("Parameter `size` should be a positive integer.")
 
-    vrange = ma_range(xs, size)
+    vrange = moving_average_range(xs, size)
     cumsum = [0] + list(accumulate(xs))
     sma = []
     window_len = 2 * size + 1
@@ -226,7 +226,7 @@ class TriggerDyadic:
     Attributes:
         maxtest: Maximum window size to test (must be power of 2).
         llr_threshold_halfsq: Detection threshold as half-squared LLR.
-        phase_counter: Counter to track window alignment.
+        phase_counter: Controls the cycle of window checks.
         frequency: Controls how many times a window is checked in a phase cycle.
         acc_x: Accumulated sum of observed counts.
         acc_b: Accumulated sum of background counts.
@@ -245,15 +245,31 @@ class TriggerDyadic:
         # convert to half, squared llr threshold for performances
         self.llr_threshold_halfsq = 0.5 * (threshold**2)
 
+        # the choice of the initial phase value determines the timings of window
+        # checks. setting to 0 meanse that the largest window will be checked first
+        # at iteration_num maxtest / 2 and again at iteration_num maxtest.
         self.phase_counter = 0
-        self.frequency = 1
+        # frequency=1: checking window length h, 1 time over h calls.
+        # frequency=2: checking window length h, 2 times over h calls.
+        # frequency=4: ... and so on
+        # frequency values must be power of two
+        self.frequency = 2
+        # using accumulator allows computing counts over a window with just one difference.
+        # not using an accumulator would require summing many individual counts.
         self.acc_x = 0
         self.acc_b = 0.
-        self.queue_x = deque([0], maxlen=maxtest + 1)
-        self.queue_b = deque([0.], maxlen=maxtest + 1)
+        # accumulator values are store in a queue.
+        # accumulator queues are pre-filled to avoid index errors.
+        # this results in a few wasted significance computation, but we can live with that.
+        maxtest_plus_one = maxtest + 1
+        self.queue_x = deque([0] * maxtest_plus_one, maxlen=maxtest_plus_one)
+        self.queue_b = deque([0.] * maxtest_plus_one, maxlen=maxtest_plus_one)
 
     def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Interval) -> List[Hit]:
         """Runs the trigger algorithm on count data with background estimates.
+
+        Windows are checked with half-length offsets or, in other words, a window
+        with length h is checked two times every h iterations.
 
         Args:
             xs: Observed count sequence.
@@ -265,7 +281,11 @@ class TriggerDyadic:
         """
         hits = []
         for i, j in enumerate(range(*vrange)):
-            hits.extend([(j, h) for h in self.step(xs[j], bs[i])])
+            # the `i - h + 1 >= 0` filtering logic means that we accept a hit from
+            # window size h only if we've processed at least h data points.
+            # this prevents large window to trigger over intervals predating first count,
+            # which could happen, if the count time series starts with huge values.
+            hits.extend([(j, h) for h in self.step(xs[j], bs[i]) if i - h + 2 > 0])
         return hits
 
     def maximize(self) -> List[int]:
@@ -280,9 +300,7 @@ class TriggerDyadic:
         hs = []
         h = 1
         while h <= self.maxtest:
-            # checking `1 * self.phase_counter % h` tests window length h, 1 time over h calls.
-            # checking `2 * self.phase_counter % h` tests window length h, 2 times over h calls.
-            if self.frequency * self.phase_counter % h:
+            if self.phase_counter % h:
                 break
             win_x = self.acc_x - self.queue_x[-h]
             win_b = self.acc_b - self.queue_b[-h]
@@ -303,10 +321,7 @@ class TriggerDyadic:
         """
         self.acc_x += x
         self.acc_b += b
-        self.phase_counter = (self.phase_counter + 1) % self.maxtest
-        if self.frequency == 1 and len(self.queue_x) == self.maxtest:
-            # once we get enough data we can check longer window more often
-            self.frequency *= 2
+        self.phase_counter = (self.phase_counter + self.frequency) % self.maxtest
         hs = self.maximize()
         self.queue_x.append(self.acc_x)
         self.queue_b.append(self.acc_b)

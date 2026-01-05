@@ -36,14 +36,13 @@ from ht1 import search_data, hit_tointerval, sra_parse, EnBand, Quadrant
 checks = (
     (EnBand.MID, Quadrant.B),
     (EnBand.MID, Quadrant.C),
+    (EnBand.MID, Quadrant.D),
 )
 
 data, abts = sra_parse("/path/to/srafile")
 hits = search_data(data, checks=checks, size=210, maxtest=16, threshold=4.5)
 for interval in map(hit_tointerval, hits):
-    start, end = interval
-    print(data[EnBand.MID][Quadrant.B][start: end])
-    # for each trigger hit, prints the over-threshold data interval for quadrant B and high-energy band.
+    ...
 ```
 
 A function `hit_tointerval` is provided for converting hits into proper time series interval ranges you can use for slicing.

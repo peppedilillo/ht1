@@ -3,7 +3,7 @@ Tests for data_valid_range function.
 """
 
 from ht1.ht1 import _INVALID_INTERVAL
-from ht1.ht1 import ma_range
+from ht1.ht1 import moving_average_range
 
 
 def test_empty_data():
@@ -11,7 +11,7 @@ def test_empty_data():
     data = []
     size = 1
     expected = _INVALID_INTERVAL
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_all_zeros():
@@ -19,7 +19,7 @@ def test_all_zeros():
     data = [0, 0, 0, 0, 0]
     size = 1
     expected = _INVALID_INTERVAL
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_single_nonzero_too_short():
@@ -27,7 +27,7 @@ def test_single_nonzero_too_short():
     data = [0, 0, 1, 0, 0]
     size = 1
     expected = _INVALID_INTERVAL
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_data_too_short_for_size():
@@ -37,7 +37,7 @@ def test_data_too_short_for_size():
     # first non-zero: i=1, last non-zero: j=2
     # after padding: i=2, j=2, so j-i=0 < 1
     expected = _INVALID_INTERVAL
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_minimum_valid_length():
@@ -47,7 +47,7 @@ def test_minimum_valid_length():
     # first non-zero: i=1, last non-zero: j=3
     # after padding: i=2, j=3, so j-i=1 >= 1
     expected = (2, 3)
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_leading_zeros():
@@ -57,7 +57,7 @@ def test_leading_zeros():
     # first non-zero: i=3, last non-zero: j=7
     # after padding: i=4, j=7
     expected = (4, 7)
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_trailing_zeros():
@@ -67,7 +67,7 @@ def test_trailing_zeros():
     # first non-zero: i=0, last non-zero: j=4
     # after padding: i=1, j=4
     expected = (1, 4)
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_leading_and_trailing_zeros():
@@ -77,7 +77,7 @@ def test_leading_and_trailing_zeros():
     # first non-zero: i=2, last non-zero: j=6
     # after padding: i=3, j=6
     expected = (3, 6)
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_no_zeros():
@@ -87,7 +87,7 @@ def test_no_zeros():
     # first non-zero: i=0, last non-zero: j=4
     # after padding: i=1, j=4
     expected = (1, 4)
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_larger_size():
@@ -97,7 +97,7 @@ def test_larger_size():
     # first non-zero: i=2, last non-zero: j=11
     # after padding: i=5, j=9
     expected = (5, 9)
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_larger_size_too_short():
@@ -107,12 +107,12 @@ def test_larger_size_too_short():
     # first non-zero: i=1, last non-zero: j=5
     # after padding: i=3, j=4, so j-i=1 >= 1
     expected = (3, 4)
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
     size = 3
     # after padding: i=4, j=3, so j-i=-1 < 1
     expected = _INVALID_INTERVAL
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_size_zero():
@@ -122,7 +122,7 @@ def test_size_zero():
     # first non-zero: i=1, last non-zero: j=1
     # after padding: i=1, j=2, so j-i=1 >= 1
     expected = (1, 2)
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_zeros_in_middle():
@@ -132,7 +132,7 @@ def test_zeros_in_middle():
     # first non-zero: i=1, last non-zero: j=5
     # after padding: i=2, j=5
     expected = (2, 5)
-    assert ma_range(data, size) == expected
+    assert moving_average_range(data, size) == expected
 
 
 def test_range_iteration():
@@ -141,7 +141,7 @@ def test_range_iteration():
     size = 1
     # first non-zero: i=2, last non-zero: j=6
     # after padding: i=3, j=6
-    result = ma_range(data, size)
+    result = moving_average_range(data, size)
     assert result == (3, 6)
     # the range should yield 3 indices: 3, 4, 5
     assert list(range(*result)) == [3, 4, 5]

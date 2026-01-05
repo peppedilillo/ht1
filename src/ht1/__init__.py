@@ -11,7 +11,7 @@ from ht1.ht1 import hit_tointerval
 from ht1.ht1 import Index
 from ht1.ht1 import Interval
 from ht1.ht1 import InvalidSRA
-from ht1.ht1 import ma_range
+from ht1.ht1 import moving_average_range
 from ht1.ht1 import moving_average
 from ht1.ht1 import Quadrant
 from ht1.ht1 import search_data
@@ -35,7 +35,7 @@ __all__ = [
     "SRASpecs",
     "InvalidSRA",
     "sra_parse",
-    "ma_range",
+    "moving_average_range",
     "moving_average",
     "significance",
     "search_qbdata",
