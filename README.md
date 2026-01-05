@@ -13,9 +13,9 @@ Assuming `python3` points to Python 3.6+:
 The `ht1.py` script has no dependencies outside standard library and requires no installation.
 If the transient search returns a positive, a new file `SRAFILE_trigger.txt` is created in the `SRAFILE` parent directory. 
 The trigger output files are purposefully minimal UTF-8 encoded text files. 
-They contain only three integers: the number of trigger hits, a start-time index, and an end-time index. The transients live somewhere between the start and end time indeces.
+They contain only three integers: the number of trigger hits, a start-time index, and an end-time index. The transients live somewhere between the start and end time indices.
 If no transient is found, no file is created.
-The script returns error code 0 upon successful execution, error code 1 over wrong parameters, or error code 2 over invalid input file.
+The script returns error code 0 upon successful execution, error code 1 over invalid input file, or error code 2 over wrong parameters.
 
 Logging to stderr defaults to error level. Use `--log` for info level, or `--log=LEVEL` to set a specific level (info, warning, error).
 For logging to file redirect stderr, e.g. `python3 ht1.py pat/to/SRAFILE --log &> ht1_log.txt`.
@@ -24,7 +24,7 @@ Search parameters can be controlled using a number of flags, see `python3 ht1.py
 
 ### Working with HT1 on ground
 
-This codebase can also be installed as package for reproducibility and on-ground applications, see [documentation](docs/scripting_ht1.md) for more info.
+This codebase can also be installed as package for reproducibility and on-ground applications, see [documentation](docs/usage_as_library.md) for more info.
 
 ## Testing
 ### With docker
