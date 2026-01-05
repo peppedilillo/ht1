@@ -257,13 +257,13 @@ class TriggerDyadic:
         # using accumulator allows computing counts over a window with just one difference.
         # not using an accumulator would require summing many individual counts.
         self.acc_x = 0
-        self.acc_b = 0.
+        self.acc_b = 0.0
         # accumulator values are store in a queue.
         # accumulator queues are pre-filled to avoid index errors.
         # this results in a few wasted significance computation, but we can live with that.
         maxtest_plus_one = maxtest + 1
         self.queue_x = deque([0] * maxtest_plus_one, maxlen=maxtest_plus_one)
-        self.queue_b = deque([0.] * maxtest_plus_one, maxlen=maxtest_plus_one)
+        self.queue_b = deque([0.0] * maxtest_plus_one, maxlen=maxtest_plus_one)
 
     def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Interval) -> List[Hit]:
         """Runs the trigger algorithm on count data with background estimates.

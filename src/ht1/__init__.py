@@ -11,8 +11,8 @@ from ht1.ht1 import hit_tointerval
 from ht1.ht1 import Index
 from ht1.ht1 import Interval
 from ht1.ht1 import InvalidSRA
-from ht1.ht1 import moving_average_range
 from ht1.ht1 import moving_average
+from ht1.ht1 import moving_average_range
 from ht1.ht1 import Quadrant
 from ht1.ht1 import search_data
 from ht1.ht1 import search_filepath

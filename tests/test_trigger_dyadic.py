@@ -38,6 +38,7 @@ def test_trigger_on_single_data():
     hits = t(xs, bs, vrange)
     assert 0 in [i for i, _ in hits]
 
+
 def test_obvious_transient_single_bin():
     """A large single-bin spike should trigger."""
     t = TriggerDyadic(maxtest=4, threshold=5.0)
