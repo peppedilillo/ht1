@@ -22,9 +22,9 @@ The variable `hits` contains a list of trigger hits as simple 2-tuple representi
 
 Note that while we validate input when using `HT1` as a script, **minimal or no checks are performed at the individual function level**.
 Hence, when using HT1 as a package, it is your responsibility to provide a rational choice for these parameters:
-* `size` must be a positive integer. It controls the extension of the moving average window. Moving average is performed over a centered window with length `2 * size + 1`.
-* `maxtest` must be a power of two integer. It controls the lenght of the count interval checked for statistically significant count excess relative to the background.
-* `threshold` must be positive float. It controls the threshold standard deviation over which an interval test results in a trigger hit.
+* `size` must be a positive integer. It controls the extension of the moving average window. Moving average is performed over a centered window with length `2 * size + 1`. Recommended value: 210 (42.1s window)
+* `maxtest` must be a power of two integer. It controls the lenght of the count interval checked for statistically significant count excess relative to the background. Recommended value: 16 (0.1s, 0.2s, 0.4s, 0.8s, 1.6s windows)
+* `threshold` must be positive float. It controls the threshold standard deviation over which an interval test results in a trigger hit. Recommended value: 5.
 
 Other search functions exists, providing more granular control over the algorithm.
 The function `search_data` for example is designed to run the algorithm over data parsed from a SRA file into HT1 format.
