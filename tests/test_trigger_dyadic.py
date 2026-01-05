@@ -27,10 +27,10 @@ def test_no_trigger_on_quiet_data():
 
 
 def test_trigger_on_single_data():
-    """Constant counts equal to background should produce no triggers."""
+    """A single data point with large excess should trigger."""
     t = TriggerDyadic(maxtest=4, threshold=3.0)
 
-    # 20 steps of quiet data: counts = background = 10
+    # Single bin with 100 counts vs background of 1
     xs = [100]
     bs = [1.0]
     vrange = (0, 1)
@@ -53,7 +53,7 @@ def test_obvious_transient_single_bin():
     hits = t(xs, bs, vrange)
 
     assert len(hits) > 0
-    # we get atn hits at the time of the transient
+    # we get hits at the time of the transient
     assert 10 in [i for i, _ in hits]
     # All hits should be at or near the spike location
     for time_idx, window_len in hits:
@@ -66,8 +66,8 @@ def test_threshold():
     """Check that we trigger over a bin just a bit above the threshold."""
     t = TriggerDyadic(maxtest=4, threshold=5.0)
 
-    # Background: 10 counts per bin
-    # Spike: 200 counts at index 10
+    # High background (1e6) to be in the Gaussian regime
+    # Spike at index 10: background + 5.01 sigma excess
     b = 1e6
     xs = [b] * 20
     xs[10] = b + sqrt(b) * 5.01
@@ -179,6 +179,37 @@ def test_call_interface():
         assert isinstance(hit[1], int)
 
 
+def test_no_trigger_predating_data_start():
+    """Huge initial counts should not trigger from windows predating data start.
+
+    When a time series starts with very high counts relative to background,
+    large windows could spuriously trigger if they summed counts from the
+    start while using background estimates from before the data existed.
+    The inf-prefill in queue_b prevents this by making such windows have
+    infinite background, causing the significance test to fail.
+    """
+    t = TriggerDyadic(maxtest=16, threshold=3.0)
+
+    # Short sequence starting with huge counts relative to background.
+    # Without the inf-prefill warmup, a window of size 8 or 16 ending at
+    # index 7 could trigger by summing all the high counts while comparing
+    # against a background that includes pre-data zeros.
+    xs = [500, 500, 500, 500, 500, 500, 500, 500]
+    bs = [10.0] * 8
+    vrange = (0, 8)
+
+    hits = t(xs, bs, vrange)
+
+    # Any hit interval must not start before the data
+    assert len(hits) > 0
+    for time_idx, window_len in hits:
+        interval_start = time_idx - window_len + 1
+        assert interval_start >= 0, (
+            f"Hit at index {time_idx} with window {window_len} "
+            f"has interval starting at {interval_start}, predating data start"
+        )
+
+
 if __name__ == "__main__":
     test_threshold_conversion()
     test_no_trigger_on_quiet_data()
@@ -189,4 +220,5 @@ if __name__ == "__main__":
     test_no_false_positives_on_fluctuations()
     test_marginal_excess_below_threshold()
     test_call_interface()
+    test_no_trigger_predating_data_start()
     print("All tests passed!")

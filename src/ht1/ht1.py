@@ -14,6 +14,7 @@ from collections import deque
 from enum import IntEnum
 from itertools import accumulate
 import logging
+from math import inf
 from math import log
 from pathlib import Path
 import struct
@@ -206,14 +207,14 @@ def moving_average(xs: Sequence[int], size: int) -> Tuple[List[float], Interval]
 
 
 def significance(x: float, b: float) -> float:
-    """Compute the half-squared Poisson log-likelihood ratio.
+    """Compute half the Poisson log-likelihood ratio.
 
     Args:
         x: Observed count.
         b: Expected background count.
 
     Returns:
-        The half-squared log-likelihood ratio, or 0.0 if x <= b or b <= 0.
+        Half the log-likelihood ratio, or 0.0 if x <= b or b <= 0.
     """
     if x <= b or b <= 0:
         return 0.0
@@ -246,7 +247,7 @@ class TriggerDyadic:
         self.llr_threshold_halfsq = 0.5 * (threshold**2)
 
         # the choice of the initial phase value determines the timings of window
-        # checks. setting to 0 meanse that the largest window will be checked first
+        # checks. setting to 0 means that the largest window will be checked first
         # at iteration_num maxtest / 2 and again at iteration_num maxtest.
         self.phase_counter = 0
         # frequency=1: checking window length h, 1 time over h calls.
@@ -258,12 +259,16 @@ class TriggerDyadic:
         # not using an accumulator would require summing many individual counts.
         self.acc_x = 0
         self.acc_b = 0.0
-        # accumulator values are store in a queue.
+        # accumulator values are stored in a queue.
         # accumulator queues are pre-filled to avoid index errors.
         # this results in a few wasted significance computation, but we can live with that.
         maxtest_plus_one = maxtest + 1
         self.queue_x = deque([0] * maxtest_plus_one, maxlen=maxtest_plus_one)
-        self.queue_b = deque([0.0] * maxtest_plus_one, maxlen=maxtest_plus_one)
+        # the background queue is filled with infinity so that we accept a hit from
+        # window size h only if we've processed at least h data points.
+        # this prevents large windows from triggering over intervals predating first count,
+        # which could happen, if the count time series starts with huge values.
+        self.queue_b = deque([inf] * maxtest + [0.], maxlen=maxtest_plus_one)
 
     def __call__(self, xs: Sequence[int], bs: Sequence[float], vrange: Interval) -> List[Hit]:
         """Runs the trigger algorithm on count data with background estimates.
@@ -281,11 +286,7 @@ class TriggerDyadic:
         """
         hits = []
         for i, j in enumerate(range(*vrange)):
-            # the `i - h + 1 >= 0` filtering logic means that we accept a hit from
-            # window size h only if we've processed at least h data points.
-            # this prevents large window to trigger over intervals predating first count,
-            # which could happen, if the count time series starts with huge values.
-            hits.extend([(j, h) for h in self.step(xs[j], bs[i]) if i - h + 2 > 0])
+            hits.extend([(j, h) for h in self.step(xs[j], bs[i])])
         return hits
 
     def maximize(self) -> List[int]:
