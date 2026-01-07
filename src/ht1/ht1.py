@@ -63,6 +63,7 @@ _SEARCH_SIZE_DEFAULT = 210
 _SEARCH_MAXTEST_DEFAULT = 16
 _SEARCH_THRESHOLD_DEFAULT = 4.5
 _SEARCH_CHECKS_DEFAULT = (
+    # we ignore triggers in low-energy band
     (EnBand.MID, Quadrant.B),
     (EnBand.MID, Quadrant.C),
     (EnBand.MID, Quadrant.D),
@@ -246,9 +247,8 @@ class TriggerDyadic:
         # convert to half, squared llr threshold for performances
         self.llr_threshold_halfsq = 0.5 * (threshold**2)
 
-        # the choice of the initial phase value determines the timings of window
-        # checks. setting to 0 means that the largest window will be checked first
-        # at iteration_num maxtest / 2 and again at iteration_num maxtest.
+        # the choice of the initial phase value determines the time-index at which
+        # a window with length h is tested for the first time
         self.phase_counter = 0
         # frequency=1: checking window length h, 1 time over h calls.
         # frequency=2: checking window length h, 2 times over h calls.
@@ -261,7 +261,8 @@ class TriggerDyadic:
         self.acc_b = 0.0
         # accumulator values are stored in a queue.
         # accumulator queues are pre-filled to avoid index errors.
-        # this results in a few wasted significance computation, but we can live with that.
+        # this results in a few wasted significance computation during first cycle.
+        # we can live with that.
         maxtest_plus_one = maxtest + 1
         self.queue_x = deque([0] * maxtest_plus_one, maxlen=maxtest_plus_one)
         # the background queue is filled with infinity so that we accept a hit from
