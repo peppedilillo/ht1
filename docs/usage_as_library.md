@@ -3,23 +3,17 @@
 You can install HT1 as a standard Python 3.6+ package for on-ground reproducibility. 
 The process is straightforward: git clone this repository, move to your local clone directory and install with `pip install .`.
 
-Once installed, you can run a transient search over a SRA file with custom parameters using `search_filepath`:
+Once installed, you can search for transient over a SRA file using `search_filepath`, which runs over all three quadrants (B, C, D) in MID and HIGH energy bands.
 
 ```python
 from ht1 import search_filepath
 
-# Runs search for triggers over all three quadrants (B, C, D) in MID and HIGH energy bands.
-# The LOW energy band is excluded from the search.
-# Requires at least 5 out of 6 quadrant/band combinations to trigger simultaneously.
-# Parameters: moving average window size 42.1s (size=210), maximum test window size 1.6s (maxtest=16),
-# detection threshold 5.0 sigma.
 hits = search_filepath("/path/to/srafile.raw", size=210, maxtest=16, threshold=5.0)
 ```
-
 The variable `hits` contains a list of trigger hits as simple 2-tuples representing (trigger time-index, trigger window length).
-Only hits that triggered simultaneously in at least 5 of the 6 quadrant/band combinations are returned, guaranteeing all quadrants and at least two energy bands are involved.
+Only hits that triggered simultaneously in at least 5 of the 6 quadrant/band combinations are returned, guaranteeing all quadrants and at least two energy bands are over threshold.
 
-Note that while we validate input when using `HT1` as a script, **minimal or no checks are performed at the individual function level**.
+Note that while we validate input when using `HT1` as a script, **minimal or no input validation is performed at function level**.
 Hence, when using HT1 as a package, it is your responsibility to provide a rational choice for these parameters:
 * `size` must be a positive integer. It controls the extension of the moving average window. Moving average is performed over a centered window with length `2 * size + 1`. Recommended value: 210 (42.1s window)
 * `maxtest` must be a power of two integer. It controls the length of the largest count interval checked for statistically significant count excess relative to the background. Recommended value: 16 (0.1s, 0.2s, 0.4s, 0.8s, 1.6s windows)
@@ -42,7 +36,7 @@ for interval in map(hit_tointerval, hits):
 
 A function `hit_tointerval` is provided for converting hits into proper time series interval ranges you can use for slicing.
 
-For custom coincidence logic, you can use `search_qbdata` for running on individual quadrant-band combinations.
+You can use `search_qbdata` for running on individual quadrant-band combinations.
 The following example shows how to search for triggers in the LOW-energy band simultaneously over all quadrants, a custom trigger condition:
 
 ```python
@@ -59,7 +53,7 @@ for band, quadrant in (
     hits = search_qbdata(data[band][quadrant], size=210, maxtest=16, threshold=5.0)
     for ih in hits:
         hits_counter[ih] += 1
-# Require all 3 LOW-band quadrants to trigger
+# requires all 3 LOW-band quadrants to trigger
 hits = [ih for ih, count in hits_counter.items() if count == 3]
 ```
 
@@ -72,11 +66,12 @@ data, abts = sra_parse("/path/to/srafile.raw")
 xs = data[EnBand.HIGH][Quadrant.C]
 bs, vrange = moving_average(xs, size=210)
 trigger = TriggerDyadic(maxtest=16, threshold=5.0)
+# runs trigger over data from quadrant C, over HIGH energy band
 hits = trigger(xs, bs, vrange)
 ```
 
-The function `moving_average` returns a 2-tuple:
+Because the length of the data and moving average estimates may differ (due to edge effects), `moving_average` provides the valid range over which the estimates are computed.
+The function returns a 2-tuple:
 - The first element contains the moving average estimates (a list of floats)
 - The second element is a range (start, end) for aligning the estimates with the data
 
-Because the length of the data and moving average estimates may differ (due to edge effects), `moving_average` provides the valid range over which the estimates are computed.
