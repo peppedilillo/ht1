@@ -12,7 +12,8 @@ Assuming `python3` points to Python 3.6+:
 
 The `ht1.py` script has no dependencies outside standard library and requires no installation.
 
-The algorithm searches for transients across six quadrant/band combinations: quadrants B, C, and D in both the MID and HIGH energy bands (LOW band is excluded). A detection requires at least 5 out of 6 combinations to trigger simultaneously, guaranteeing all three quadrants and at least two energy bands are involved.
+The algorithm searches for transients across six quadrant/band combinations: quadrants B, C, and D in both the MID and HIGH energy bands (LOW band is excluded). 
+A detection requires at least 5 out of 6 combinations to trigger simultaneously, guaranteeing all three quadrants and at least two energy bands are over threshold.
 
 If the transient search returns a positive, a new file `SRAFILE_trigger.txt` is created in the `SRAFILE.raw` parent directory.
 The trigger output files are purposefully minimal UTF-8 encoded text files.
