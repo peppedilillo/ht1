@@ -6,7 +6,7 @@ from setuptools import setup
 here = pathlib.Path(__file__).parent.resolve()
 setup(
     name="ht1",
-    version="0.1",
+    version="0.2",
     author="Giuseppe Dilillo",
     classifiers=[
         "License :: OSI Approved :: MIT License",

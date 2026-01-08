@@ -375,8 +375,9 @@ def search_data(data: Data, size: int, maxtest: int, threshold: float) -> List[H
         hits = search_qbdata(data[band][quadrant], size, maxtest, threshold)
         for ih in hits:
             hits_counter[ih] += 1
-    # why *>4*? i think asking for at least 5 quadrant/band combo to be over threshold is the right
-    # number because that's the smallest number of combinations necessary to guarantee:
+    # why *>4*?
+    # i think asking for at least 5 quadrant/band combo to be over threshold is the right choice
+    # because that's the smallest number of combinations necessary to guarantee:
     #   1. all quadrant to be above threshold;
     #   2. over at least two energy band.
     # we could ask for 6, but doing so the conditions seems to stiff. this, relax it a bit.
