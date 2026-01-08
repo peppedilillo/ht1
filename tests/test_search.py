@@ -70,75 +70,118 @@ def _make_test_data(npoints, transient_idx=None, transient_value=500):
     return data
 
 
-def test_search_data_empty_checks():
-    """Empty checks list returns empty hits."""
-    data = _make_test_data(500, transient_idx=300)
-    hits = search_data(data, checks=[], size=20, maxtest=8, threshold=5.0)
-    assert hits == []
-
-
-def test_search_data_single_check():
-    """Single check returns hits from that band/quadrant."""
-    data = _make_test_data(500, transient_idx=300)
-    checks = [(EnBand.MID, Quadrant.B)]
-    hits = search_data(data, checks, size=20, maxtest=8, threshold=5.0)
-    assert len(hits) > 0
-
-
-def test_search_data_coincidence_all_match():
-    """Hits present in all checks are returned."""
-    data = _make_test_data(500, transient_idx=300)
-    checks = [
-        (EnBand.MID, Quadrant.B),
-        (EnBand.MID, Quadrant.C),
-        (EnBand.HIGH, Quadrant.B),
-    ]
-    hits = search_data(data, checks, size=20, maxtest=8, threshold=5.0)
-    assert len(hits) > 0
-
-
-def test_search_data_coincidence_partial_match():
-    """Hits only in some checks are filtered out."""
-    # Create data with transient only in one quadrant
-    data = tuple(tuple([10] * 500 for _ in range(3)) for _ in range(3))
-    # Insert transient only in quadrant B, band MID
-    data[EnBand.MID][Quadrant.B][300] = 500
-
-    checks = [
-        (EnBand.MID, Quadrant.B),  # has transient
-        (EnBand.MID, Quadrant.C),  # no transient
-    ]
-    hits = search_data(data, checks, size=20, maxtest=8, threshold=5.0)
-    # No hits because transient not in all checks
-    assert hits == []
-
-
-def test_search_data_quiet_all_checks():
-    """Quiet data in all checks returns no hits."""
-    data = _make_test_data(500, transient_idx=None)
-    checks = [
-        (EnBand.MID, Quadrant.B),
-        (EnBand.MID, Quadrant.C),
-        (EnBand.MID, Quadrant.D),
-    ]
-    hits = search_data(data, checks, size=20, maxtest=8, threshold=5.0)
-    assert hits == []
-
-
 def test_search_data_different_transient_times():
     """Transients at different times in different checks don't coincide."""
     data = tuple(tuple([10] * 500 for _ in range(3)) for _ in range(3))
     # Transient at different times in different quadrants
     data[EnBand.MID][Quadrant.B][300] = 500
     data[EnBand.MID][Quadrant.C][350] = 500  # different time
-
-    checks = [
-        (EnBand.MID, Quadrant.B),
-        (EnBand.MID, Quadrant.C),
-    ]
-    hits = search_data(data, checks, size=20, maxtest=8, threshold=5.0)
+    hits = search_data(data, size=20, maxtest=8, threshold=5.0)
     # No coincident hits
     assert hits == []
+
+
+def test_search_data_only_4_channels_insufficient():
+    """Very obvious transient in only 4 quadrant/band combinations is missed."""
+    data = tuple(tuple([10] * 500 for _ in range(3)) for _ in range(3))
+
+    # Insert very strong transient (10x background) in only 4 channels
+    # MID band: all 3 quadrants (3 channels)
+    data[EnBand.MID][Quadrant.B][300] = 200
+    data[EnBand.MID][Quadrant.C][300] = 200
+    data[EnBand.MID][Quadrant.D][300] = 200
+
+    # HIGH band: only 1 quadrant (1 channel)
+    data[EnBand.HIGH][Quadrant.B][300] = 200
+    # HIGH/C and HIGH/D remain at background level
+
+    # Total: 4 channels triggered, need 5
+    hits = search_data(data, size=20, maxtest=8, threshold=5.0)
+    assert hits == [], f"Expected no hits with only 4 channels, got {len(hits)} hits"
+
+
+def test_search_data_5_channels_detected():
+    """Less obvious transient in 5 quadrant/band combinations is detected."""
+    data = tuple(tuple([10] * 500 for _ in range(3)) for _ in range(3))
+
+    # Insert moderate transient (enough to trigger at 5 sigma) in 5 channels
+    # Use a smaller excess than previous test, but over 5 channels
+    transient_idx = 300
+    transient_value = 100  # 10x background, should trigger at 5 sigma
+
+    # MID band: all 3 quadrants
+    data[EnBand.MID][Quadrant.B][transient_idx] = transient_value
+    data[EnBand.MID][Quadrant.C][transient_idx] = transient_value
+    data[EnBand.MID][Quadrant.D][transient_idx] = transient_value
+
+    # HIGH band: 2 quadrants (total: 5 channels)
+    data[EnBand.HIGH][Quadrant.B][transient_idx] = transient_value
+    data[EnBand.HIGH][Quadrant.C][transient_idx] = transient_value
+    # HIGH/D remains at background
+
+    hits = search_data(data, size=20, maxtest=8, threshold=5.0)
+    assert len(hits) > 0, "Expected hits with 5 channels triggering"
+
+    # Verify the hit is at or near the transient time
+    hit_times = [t for t, _ in hits]
+    assert any(abs(t - transient_idx) <= 8 for t in hit_times), \
+        f"Expected hit near index {transient_idx}, got hits at {hit_times}"
+
+
+def test_search_data_all_6_channels_detected():
+    """Transient in all 6 quadrant/band combinations is detected."""
+    data = tuple(tuple([10] * 500 for _ in range(3)) for _ in range(3))
+
+    transient_idx = 250
+    transient_value = 120
+
+    # All 6 channels trigger
+    data[EnBand.MID][Quadrant.B][transient_idx] = transient_value
+    data[EnBand.MID][Quadrant.C][transient_idx] = transient_value
+    data[EnBand.MID][Quadrant.D][transient_idx] = transient_value
+    data[EnBand.HIGH][Quadrant.B][transient_idx] = transient_value
+    data[EnBand.HIGH][Quadrant.C][transient_idx] = transient_value
+    data[EnBand.HIGH][Quadrant.D][transient_idx] = transient_value
+
+    hits = search_data(data, size=20, maxtest=8, threshold=5.0)
+    assert len(hits) > 0, "Expected hits with all 6 channels triggering"
+
+    hit_times = [t for t, _ in hits]
+    assert any(abs(t - transient_idx) <= 8 for t in hit_times), \
+        f"Expected hit near index {transient_idx}, got hits at {hit_times}"
+
+
+def test_search_data_quiet_in_all_channels():
+    """Quiet data in all channels returns no hits."""
+    data = tuple(tuple([10] * 500 for _ in range(3)) for _ in range(3))
+    # No transients, just constant background
+    hits = search_data(data, size=20, maxtest=8, threshold=5.0)
+    assert hits == []
+
+
+def test_search_data_5_channels_different_window_sizes():
+    """Transient detected with 5 channels, verify window size reported."""
+    data = tuple(tuple([10] * 500 for _ in range(3)) for _ in range(3))
+
+    # Create a multi-bin transient to test window sizing
+    transient_start = 300
+    transient_duration = 4  # 4 bins
+    transient_value = 80
+
+    for i in range(transient_start, transient_start + transient_duration):
+        data[EnBand.MID][Quadrant.B][i] = transient_value
+        data[EnBand.MID][Quadrant.C][i] = transient_value
+        data[EnBand.MID][Quadrant.D][i] = transient_value
+        data[EnBand.HIGH][Quadrant.B][i] = transient_value
+        data[EnBand.HIGH][Quadrant.C][i] = transient_value
+
+    hits = search_data(data, size=20, maxtest=8, threshold=5.0)
+    assert len(hits) > 0, "Expected hits with extended transient"
+
+    # Should have hits with window sizes that match transient duration
+    window_sizes = [h for _, h in hits]
+    assert any(w >= transient_duration for w in window_sizes), \
+        f"Expected window size >= {transient_duration}, got {window_sizes}"
 
 
 # --- search_filepath tests ---
@@ -150,7 +193,7 @@ def test_search_filepath_file_not_found():
     """Non-existent file raises FileNotFoundError."""
     with pytest.raises(FileNotFoundError):
         search_filepath(
-            Path("/nonexistent/path/file.raw"), checks=[(EnBand.MID, Quadrant.B)], size=20, maxtest=8, threshold=5.0
+            Path("/nonexistent/path/file.raw"), size=20, maxtest=8, threshold=5.0
         )
 
 
@@ -161,7 +204,7 @@ def test_search_filepath_invalid_sra(tmp_path):
     bad_file.write_bytes(b"short")
 
     with pytest.raises(InvalidSRA):
-        search_filepath(bad_file, checks=[(EnBand.MID, Quadrant.B)], size=20, maxtest=8, threshold=5.0)
+        search_filepath(bad_file, size=20, maxtest=8, threshold=5.0)
 
 
 def test_search_filepath_with_real_data():
@@ -171,13 +214,8 @@ def test_search_filepath_with_real_data():
     if not test_file.exists():
         pytest.skip("Test data file not available")
 
-    checks = [
-        (EnBand.MID, Quadrant.B),
-        (EnBand.MID, Quadrant.C),
-        (EnBand.MID, Quadrant.D),
-    ]
     # Should complete without raising
-    hits = search_filepath(test_file, checks, size=210, maxtest=8, threshold=5.0)
+    hits = search_filepath(test_file, size=210, maxtest=8, threshold=5.0)
     assert isinstance(hits, list)
 
 
@@ -187,9 +225,7 @@ def test_search_filepath_accepts_string_path():
     if not test_file.exists():
         pytest.skip("Test data file not available")
 
-    checks = [(EnBand.MID, Quadrant.B)]
-    # Pass as string
-    hits = search_filepath(str(test_file), checks, size=210, maxtest=8, threshold=5.0)
+    hits = search_filepath(str(test_file), size=210, maxtest=8, threshold=5.0)
     assert isinstance(hits, list)
 
 
@@ -199,13 +235,12 @@ if __name__ == "__main__":
     test_search_qbdata_data_too_short()
     test_search_qbdata_quiet_data()
     test_search_qbdata_with_transient()
-
-    test_search_data_empty_checks()
-    test_search_data_single_check()
-    test_search_data_coincidence_all_match()
-    test_search_data_coincidence_partial_match()
-    test_search_data_quiet_all_checks()
     test_search_data_different_transient_times()
+    test_search_data_only_4_channels_insufficient()
+    test_search_data_5_channels_detected()
+    test_search_data_all_6_channels_detected()
+    test_search_data_quiet_in_all_channels()
+    test_search_data_5_channels_different_window_sizes()
 
     # Skip filepath tests in direct run (need pytest fixtures)
     print("All basic tests passed!")

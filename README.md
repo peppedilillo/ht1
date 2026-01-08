@@ -8,17 +8,20 @@ Targets Python 3.6+ and was developed for deployment on the SpIRIT-Loris NVIDIA 
 Assuming `python3` points to Python 3.6+:
 
 1. Copy the script `ht1.py` from the `src/ht1` directory.
-2. Run with `python3 ht1.py path/to/SRAFILE`.
+2. Run with `python3 ht1.py path/to/SRAFILE.raw`.
 
 The `ht1.py` script has no dependencies outside standard library and requires no installation.
-If the transient search returns a positive, a new file `SRAFILE_trigger.txt` is created in the `SRAFILE` parent directory. 
-The trigger output files are purposefully minimal UTF-8 encoded text files. 
+
+The algorithm searches for transients across six quadrant/band combinations: quadrants B, C, and D in both the MID and HIGH energy bands (LOW band is excluded). A detection requires at least 5 out of 6 combinations to trigger simultaneously, guaranteeing all three quadrants and at least two energy bands are involved.
+
+If the transient search returns a positive, a new file `SRAFILE_trigger.txt` is created in the `SRAFILE.raw` parent directory.
+The trigger output files are purposefully minimal UTF-8 encoded text files.
 They contain only three integers: the number of trigger hits, a start-time index, and an end-time index. The transients live somewhere between the start and end time indices.
 If no transient is found, no file is created.
 The script returns error code 0 upon successful execution, error code 1 over invalid input file, or error code 2 over wrong parameters.
 
 Logging to stderr defaults to error level. Use `--log` for info level, or `--log=LEVEL` to set a specific level (info, warning, error).
-For logging to file redirect stderr, e.g. `python3 ht1.py pat/to/SRAFILE --log &> ht1_log.txt`.
+For logging to file redirect stderr, e.g. `python3 ht1.py pat/to/SRAFILE.raw --log &> ht1_log.txt`.
 
 Search parameters can be controlled using a number of flags, see `python3 ht1.py --help` for more information.
 

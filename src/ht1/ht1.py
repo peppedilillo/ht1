@@ -5,7 +5,7 @@ background estimation, and apply a dyadic windowed trigger algorithm to detect
 Poisson count excesses (transients).
 
 Example:
-    $ python ht1.py srafile --threshold 5.0 --maxtest 16
+    $ python ht1.py srafile.raw --threshold 5.0 --maxtest 16
 """
 
 import argparse
@@ -61,17 +61,7 @@ _NBANDS: int = 3
 
 _SEARCH_SIZE_DEFAULT = 210
 _SEARCH_MAXTEST_DEFAULT = 16
-_SEARCH_THRESHOLD_DEFAULT = 4.5
-_SEARCH_CHECKS_DEFAULT = (
-    # we ignore triggers in low-energy band
-    (EnBand.MID, Quadrant.B),
-    (EnBand.MID, Quadrant.C),
-    (EnBand.MID, Quadrant.D),
-    (EnBand.HIGH, Quadrant.B),
-    (EnBand.HIGH, Quadrant.C),
-    (EnBand.HIGH, Quadrant.D),
-)
-
+_SEARCH_THRESHOLD_DEFAULT = 5.
 _INVALID_INTERVAL = (-1, -1)
 
 
@@ -351,51 +341,79 @@ def search_qbdata(xs: Sequence[int], size: int, maxtest: int, threshold: float) 
     return t(xs, bs, vrange=(vmin, vmax))
 
 
-def search_data(data: Data, checks: Sequence[Index], size: int, maxtest: int, threshold: float) -> List[Hit]:
+def search_data(data: Data, size: int, maxtest: int, threshold: float) -> List[Hit]:
     """Searches data for transients across multiple band/quadrant combinations.
 
-    Only returns hits that trigger in all specified combinations simultaneously.
+    Searches six quadrant/band combinations: all three quadrants (B, C, D) in both
+    the MID and HIGH energy bands. The LOW energy band is excluded from the search.
+
+    Only returns hits that trigger simultaneously (same time index and window length)
+    in at least five of the six combinations. This requirement guarantees that all
+    three quadrants triggered and at least two energy bands are over threshold.
 
     Args:
         data: Nested tuple of count lists indexed by (band, quadrant).
-        checks: Sequence of (band, quadrant) combinations to search.
         size: Half-window size for moving average background estimate.
         maxtest: Maximum trigger window size (must be power of 2).
         threshold: Detection threshold in sigma units.
 
     Returns:
-        List of hits that triggered in all specified combinations.
+        List of hits as (time_index, window_length) tuples that met the
+        coincidence requirement.
     """
     hits_counter = Counter()
-    for band, quadrant in checks:
+    for band, quadrant in (
+        # we ignore triggers in low-energy band
+        (EnBand.MID, Quadrant.B),
+        (EnBand.MID, Quadrant.C),
+        (EnBand.MID, Quadrant.D),
+        (EnBand.HIGH, Quadrant.B),
+        (EnBand.HIGH, Quadrant.C),
+        (EnBand.HIGH, Quadrant.D),
+    ):
         _logger.info(f"Running on quadrant {quadrant.name}, band {band.name}")
         hits = search_qbdata(data[band][quadrant], size, maxtest, threshold)
         for ih in hits:
             hits_counter[ih] += 1
-    return [ih for ih, count in hits_counter.items() if count == len(checks)]
+    # why *>4*? i think asking for at least 5 quadrant/band combo to be over threshold is the right
+    # number because that's the smallest number of combinations necessary to guarantee:
+    #   1. all quadrant to be above threshold;
+    #   2. over at least two energy band.
+    # we could ask for 6, but doing so the conditions seems to stiff. this, relax it a bit.
+    return [ih for ih, count in hits_counter.items() if count > 4]
 
 
 def search_filepath(
     filepath: Union[Path, str],
-    checks: Sequence[Index],
     size: int,
     maxtest: int,
     threshold: float,
 ) -> List[Hit]:
-    """Searches an SRA file for transient events.
+    """Searches an SRA file for transient events across multiple band/quadrant combinations.
+
+    Searches six quadrant/band combinations: all three quadrants (B, C, D) in both
+    the MID and HIGH energy bands. The LOW energy band is excluded from the search.
+
+    Only returns hits that trigger simultaneously (same time index and window length)
+    in at least five of the six combinations. This requirement guarantees that all
+    three quadrants triggered and at least two energy bands are over threshold.
 
     Args:
         filepath: Path to the SRA file.
-        checks: Sequence of (band, quadrant) combinations to search.
         size: Half-window size for moving average background estimate.
         maxtest: Maximum trigger window size (must be power of 2).
         threshold: Detection threshold in sigma units.
 
     Returns:
-        List of hits as (time_index, window_length) tuples.
+        List of hits as (time_index, window_length) tuples that met the
+        coincidence requirement.
+
+    Raises:
+        FileNotFoundError: If the specified file does not exist.
+        InvalidSRA: If the file is malformed or invalid.
     """
     data, abts = sra_parse(filepath)
-    return search_data(data, checks, size, maxtest, threshold)
+    return search_data(data, size, maxtest, threshold)
 
 
 def hit_tointerval(hit: Hit) -> Interval:
@@ -431,10 +449,15 @@ def summarize(hits: Sequence[Hit]) -> Tuple[int, Interval]:
 
 
 def main() -> ErrorCode:
-    """Searches an SRA file for transient events and write results to output file.
+    """Searches an SRA file for transient events and writes results to output file.
 
     Parses command-line arguments and runs the trigger algorithm on the specified SRA file.
-    Writes a summary to <filename>_trigger.txt if any transient is found.
+    Searches six quadrant/band combinations (quadrants B, C, D in MID and HIGH energy bands)
+    and requires at least five simultaneous triggers to declare a detection. This guarantees
+    all three quadrants triggered and at least two energy bands are over threshold.
+
+    If transients are detected, writes a summary to <filename>_trigger.txt containing
+    the number of hits and the bounding interval.
 
     Returns:
         - OK (0) on success
@@ -503,7 +526,6 @@ def main() -> ErrorCode:
         nhits, (start, end) = summarize(
             search_filepath(
                 filepath,
-                checks=_SEARCH_CHECKS_DEFAULT,
                 size=args.size,
                 maxtest=args.maxtest,
                 threshold=args.threshold,
